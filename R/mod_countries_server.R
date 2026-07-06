@@ -767,10 +767,10 @@ mod_countries_server <- function(id) {
         )))
       }
 
-      d[, `:=`(year = as.character(year), trade = round(trade / 1e3, 2), group = "Exports")]
+      d[, `:=`(year = as.character(year), trade = round(trade / 1e3, 2), group = "Exports", color = "#67c090")]
 
       d3po(d) |>
-        po_line(daes(x = .data$year, y = .data$trade, group = .data$group)) |>
+        po_line(daes(x = .data$year, y = .data$trade, group = .data$group, color = .data$color)) |>
         po_labels(x = "Year", y = "Exports (USD billion)", title = trd_line_exp_tt()) |>
         po_tooltip("{year}: {trade} B")
     }) |>
@@ -863,10 +863,10 @@ mod_countries_server <- function(id) {
         )))
       }
 
-      d[, `:=`(year = as.character(year), trade = round(trade / 1e3, 2), group = "Imports")]
+      d[, `:=`(year = as.character(year), trade = round(trade / 1e3, 2), group = "Imports", color = "#26667f")]
 
       d3po(d) |>
-        po_line(daes(x = .data$year, y = .data$trade, group = .data$group)) |>
+        po_line(daes(x = .data$year, y = .data$trade, group = .data$group, color = .data$color)) |>
         po_labels(x = "Year", y = "Imports (USD billion)", title = trd_line_imp_tt()) |>
         po_tooltip("{year}: {trade} B")
     }) |>

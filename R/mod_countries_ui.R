@@ -126,7 +126,7 @@ mod_countries_ui <- function(id) {
           br(),
           card(
             htmlOutput(ns("exp_tt_yr"), container = tags$h2),
-            p("These charts show export evolution over the selected years (line chart) and export composition by product category (treemaps) for the first and last year."),
+            p("These charts show exports evolution over the selected years (line chart) and exports composition by sector and industry (treemaps) for the first and last year."),
             fluidRow(
               col_12(
                 d3po_output(ns("trd_line_exp"), height = "400px")
@@ -151,7 +151,7 @@ mod_countries_ui <- function(id) {
           br(),
           card(
             htmlOutput(ns("imp_tt_yr"), container = tags$h2),
-            p("These charts show import evolution over the selected years (line chart) and import composition by product category (treemaps) for the first and last year."),
+            p("These charts show imports evolution over the selected years (line chart) and imports composition by sector and industry (treemaps) for the first and last year."),
             fluidRow(
               col_12(
                 d3po_output(ns("trd_line_imp"), height = "400px")
