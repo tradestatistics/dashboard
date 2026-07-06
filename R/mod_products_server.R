@@ -71,152 +71,102 @@ mod_products_server <- function(id) {
     df_agg <- reactive({
       session$sendCustomMessage("showProgress", list(text = "Loading data..."))
 
-      # evaluate reactives locally to avoid unquoting closures inside tbl() pipelines
       yrs <- inp_y()
       scode <- inp_s()
 
-      d <- tbl(con, tbl_agg) %>%
-        filter(!!sym("year") %in% yrs)
-
-      # Apply section/commodity filter if specified (operate on local df)
-      if (nchar(scode) == 4) {
-        d <- d %>%
-          filter(substr(!!sym("commodity_code"), 1, 4) == scode)
+      year_in <- paste(as.integer(yrs), collapse = ",")
+      sector_clause <- if (nchar(scode) == 4) {
+        sprintf(" AND substr(industry_id, 1, 4) = '%s'", gsub("'", "''", scode))
       } else if (nchar(scode) == 2) {
-        d <- d %>%
-          filter(!!sym("section_code") == scode)
+        sprintf(" AND broad_sector_id = '%s'", gsub("'", "''", scode))
+      } else {
+        ""
       }
 
-      # Use import data as measure of trade (more accurate from importer's perspective)
-      d <- d %>%
-        group_by(!!sym("year")) %>%
-        summarise(
-          trade_value_usd_exp = sum(!!sym("trade_value_usd_exp"), na.rm = TRUE),
-          trade_value_usd_imp = sum(!!sym("trade_value_usd_imp"), na.rm = TRUE),
-          .groups = "drop"
-        ) %>%
-        collect()
+      d <- setDT(pool::dbGetQuery(con, sprintf(
+        "SELECT year, SUM(trade) AS trade FROM %s WHERE year IN (%s)%s GROUP BY year",
+        tbl_agg, year_in, sector_clause
+      )))
 
-      if (inp_d() != "No") {
-        d <- gdp_deflator_adjustment(d, as.integer(inp_d()), con = con)
-      }
+      d[, `:=`(trade_value_usd_imp = trade, trade_value_usd_exp = trade)]
+      d[, trade := NULL]
 
       return(d)
-    }) %>%
-      bindCache(inp_y(), inp_s(), inp_d()) %>%
+    }) |>
+      bindCache(inp_y(), inp_s(), inp_d()) |>
       bindEvent(input$go)
 
     df_dtl <- reactive({
-      # Evaluate reactives locally to avoid using closures in tbl operations
       yrs <- inp_y()
       scode <- inp_s()
 
-      # Base data from yrpc table - use evaluated yrs variable
-      d <- tbl(con, tbl_dtl) %>%
-        filter(!!sym("year") %in% yrs)
-
-      # Apply section/commodity filter if specified (operate on local df)
-      if (nchar(scode) == 4) {
-        d <- d %>%
-          filter(substr(!!sym("commodity_code"), 1, 4) == scode)
+      year_in <- paste(as.integer(yrs), collapse = ",")
+      sector_clause <- if (nchar(scode) == 4) {
+        sprintf(" AND substr(industry_id, 1, 4) = '%s'", gsub("'", "''", scode))
       } else if (nchar(scode) == 2) {
-        d <- d %>%
-          filter(!!sym("section_code") == scode)
+        sprintf(" AND broad_sector_id = '%s'", gsub("'", "''", scode))
+      } else {
+        ""
       }
 
-      # Get commodities reference data and collect early to avoid lazy evaluation issues
+      d_raw <- setDT(pool::dbGetQuery(con, sprintf(
+        "SELECT * FROM %s WHERE year IN (%s)%s",
+        tbl_dtl, year_in, sector_clause
+      )))
 
-      commodities_ref <- tbl(con, "commodities") %>%
-        distinct(!!sym("commodity_code"), !!sym("section_code"), !!sym("commodity_code_short"))
+      # Get commodities reference data
+      commodities_ref <- setDT(pool::dbGetQuery(con,
+        "SELECT DISTINCT industry_id, broad_sector_id, commodity_code_short FROM commodities"
+      ))
 
-      # For imports: use direct import data (more accurate)
-      d_imp <- d %>%
-        inner_join(commodities_ref, by = c("commodity_code", "section_code")) %>%
-        select(-!!sym("trade_value_usd_exp"))
+      d_raw <- merge(d_raw, commodities_ref, by = c("industry_id", "broad_sector_id"))
 
+      # d_imp: imports perspective (importer is the reporter)
       if (nchar(scode) == 4) {
-        d_imp <- d_imp %>%
-          group_by(!!sym("year"), !!sym("reporter_iso"), !!sym("partner_iso"), commodity_code = !!sym("commodity_code_short")) %>%
-          summarise(
-            trade_value_usd_imp = sum(!!sym("trade_value_usd_imp"), na.rm = TRUE),
-            .groups = "drop"
-          )
+        d_imp <- d_raw[,
+          .(trade_value_usd_imp = sum(trade, na.rm = TRUE)),
+          by = .(year, importer, exporter, commodity_code = commodity_code_short)
+        ]
       } else if (nchar(scode) == 2) {
-        d_imp <- d_imp %>%
-          group_by(!!sym("year"), !!sym("reporter_iso"), !!sym("partner_iso"), commodity_code = !!sym("section_code")) %>%
-          summarise(
-            trade_value_usd_imp = sum(!!sym("trade_value_usd_imp"), na.rm = TRUE),
-            .groups = "drop"
-          )
+        d_imp <- d_raw[,
+          .(trade_value_usd_imp = sum(trade, na.rm = TRUE)),
+          by = .(year, importer, exporter, commodity_code = broad_sector_id)
+        ]
       }
 
-      # For exports: use imports but swap reporter/partner perspective
-      # If country A reports importing product X from country B,
-      # then country B exported product X to country A
-      d_exp <- d %>%
-        inner_join(commodities_ref, by = c("commodity_code", "section_code")) %>%
-        mutate(
-          original_reporter = !!sym("reporter_iso"),
-          reporter_iso = !!sym("partner_iso"), # Swap perspective: partner becomes reporter
-          partner_iso = !!sym("original_reporter"), # Original reporter becomes partner
-          trade_value_usd_exp = !!sym("trade_value_usd_imp") # Imports = exports from partners
-        ) %>%
-        select(-!!sym("trade_value_usd_imp"))
-
+      # d_exp: exports perspective (swap importer/exporter)
       if (nchar(scode) == 4) {
-        d_exp <- d_exp %>%
-          group_by(!!sym("year"), !!sym("reporter_iso"), !!sym("partner_iso"), commodity_code = !!sym("commodity_code_short")) %>%
-          summarise(
-            trade_value_usd_exp = sum(!!sym("trade_value_usd_exp"), na.rm = TRUE),
-            .groups = "drop"
-          )
+        d_exp <- d_raw[,
+          .(trade_value_usd_exp = sum(trade, na.rm = TRUE)),
+          by = .(year, importer = exporter, exporter = importer, commodity_code = commodity_code_short)
+        ]
       } else if (nchar(scode) == 2) {
-        d_exp <- d_exp %>%
-          group_by(!!sym("year"), !!sym("reporter_iso"), !!sym("partner_iso"), commodity_code = !!sym("section_code")) %>%
-          summarise(
-            trade_value_usd_exp = sum(!!sym("trade_value_usd_exp"), na.rm = TRUE),
-            .groups = "drop"
-          )
+        d_exp <- d_raw[,
+          .(trade_value_usd_exp = sum(trade, na.rm = TRUE)),
+          by = .(year, importer = exporter, exporter = importer, commodity_code = broad_sector_id)
+        ]
       }
 
-      d <- d_imp %>%
-        left_join(
-          d_exp,
-          by = c(
-            "year", "reporter_iso", "partner_iso", "commodity_code"
-          )
-        ) %>%
-        mutate(
-          trade_value_usd_exp = ifelse(is.na(!!sym("trade_value_usd_exp")), 0, !!sym("trade_value_usd_exp")),
-          trade_value_usd_imp = ifelse(is.na(!!sym("trade_value_usd_imp")), 0, !!sym("trade_value_usd_imp"))
-        )
+      d <- merge(d_imp, d_exp, by = c("year", "importer", "exporter", "commodity_code"), all.x = TRUE)
+      d[is.na(trade_value_usd_exp), trade_value_usd_exp := 0]
+      d[is.na(trade_value_usd_imp), trade_value_usd_imp := 0]
 
+      # Add section color
       if (nchar(scode) == 4L) {
-        d <- d %>%
-          inner_join(
-            tbl(con, "commodities") %>%
-              distinct(commodity_code = !!sym("commodity_code_short"), !!sym("section_color")),
-            by = "commodity_code"
-          )
+        colors_ref <- setDT(pool::dbGetQuery(con,
+          "SELECT DISTINCT commodity_code_short AS commodity_code, section_color FROM commodities"
+        ))
+        d <- merge(d, colors_ref, by = "commodity_code")
       } else if (nchar(scode) == 2) {
-        d <- d %>%
-          inner_join(
-            tbl(con, "commodities") %>%
-              distinct(commodity_code = !!sym("section_code"), !!sym("section_color")),
-            by = "commodity_code"
-          )
-      }
-
-      d <- collect(d)
-
-      if (inp_d() != "No") {
-        d <- gdp_deflator_adjustment(d, as.integer(inp_d()), con = con)
-        message(glue::glue("[mod_products_server] df_dtl after deflator: rows={nrow(d)}"))
+        colors_ref <- setDT(pool::dbGetQuery(con,
+          "SELECT DISTINCT broad_sector_id AS commodity_code, section_color FROM commodities"
+        ))
+        d <- merge(d, colors_ref, by = "commodity_code")
       }
 
       return(d)
-    }) %>%
-      bindCache(inp_y(), inp_s(), inp_d(), "yrpc") %>%
+    }) |>
+      bindCache(inp_y(), inp_s(), inp_d(), "yrpc") |>
       bindEvent(input$go)
 
     ## Trade ----
@@ -225,33 +175,24 @@ mod_products_server <- function(id) {
 
     # Consolidated trade values calculation for efficiency
     trade_values <- eventReactive(input$go, {
-      d <- df_agg() %>%
-        select(!!sym("year"), !!sym("trade_value_usd_exp"), !!sym("trade_value_usd_imp")) %>%
-        filter(!!sym("year") %in% c(min(inp_y()), max(inp_y())))
+      yrs <- c(min(inp_y()), max(inp_y()))
+      df_agg()[year %in% yrs, .(year, trade_value_usd_exp, trade_value_usd_imp)]
     })
 
     exp_val_min_yr <- eventReactive(input$go, {
-      trade_values() %>%
-        filter(!!sym("year") == min(inp_y())) %>%
-        pull(!!sym("trade_value_usd_exp"))
+      trade_values()[year == min(inp_y()), trade_value_usd_exp]
     })
 
     exp_val_max_yr <- eventReactive(input$go, {
-      trade_values() %>%
-        filter(!!sym("year") == max(inp_y())) %>%
-        pull(!!sym("trade_value_usd_exp"))
+      trade_values()[year == max(inp_y()), trade_value_usd_exp]
     })
 
     imp_val_min_yr <- eventReactive(input$go, {
-      trade_values() %>%
-        filter(!!sym("year") == min(inp_y())) %>%
-        pull(!!sym("trade_value_usd_imp"))
+      trade_values()[year == min(inp_y()), trade_value_usd_imp]
     })
 
     imp_val_max_yr <- eventReactive(input$go, {
-      trade_values() %>%
-        filter(!!sym("year") == max(inp_y())) %>%
-        pull(!!sym("trade_value_usd_imp"))
+      trade_values()[year == max(inp_y()), trade_value_usd_imp]
     })
 
     imp_val_min_yr_2 <- eventReactive(input$go, {
@@ -300,18 +241,18 @@ mod_products_server <- function(id) {
         year = d$year,
         trade = d$trade_value_usd_imp,
         flow = "Imports"
-      ) %>%
+      ) |>
         mutate(
           year = as.character(!!sym("year")),
           color = ifelse(!!sym("flow") == "Exports", "#67c090", "#26667f")
         )
 
       # convert to billions for display
-      d <- d %>%
-        arrange(!!sym("year")) %>%
+      d <- d |>
+        arrange(!!sym("year")) |>
         mutate(trade_billion = .data$trade / 1e9)
 
-      d3po(d) %>%
+      d3po(d) |>
         po_bar(
           daes(
             x = .data$year,
@@ -320,15 +261,15 @@ mod_products_server <- function(id) {
             color = .data$color,
             stack = FALSE
           )
-        ) %>%
+        ) |>
         po_labels(
           x = "Year",
           y = "Trade Value (USD billion)",
           title = trd_exc_columns_title()
-        ) %>%
+        ) |>
         po_format(
           y = format(.data$trade_billion, big.mark = " ", scientific = FALSE, digits = 2)
-        ) %>%
+        ) |>
         po_tooltip(JS(
           "function(value, row) {
             if (!row) return '';
@@ -337,10 +278,10 @@ mod_products_server <- function(id) {
             var groupPrefix = grp ? (grp + ': ') : '';
             return groupPrefix + (val || 0) + ' billion';
           }"
-        )) %>%
-        po_background("transparent")
-    }) %>%
-      bindCache(inp_y(), inp_s(), inp_d()) %>%
+        ))
+
+    }) |>
+      bindCache(inp_y(), inp_s(), inp_d()) |>
       bindEvent(input$go)
 
     ## Exports ----
@@ -362,57 +303,33 @@ mod_products_server <- function(id) {
 
     # Export column charts
     exp_col_min_yr_usd <- reactive({
-      # Evaluate year locally to avoid reactive closure issues
       min_year <- min(inp_y())
 
-      # Get countries reference data
-      countries_data <- tbl(con, "countries") %>%
-        select(!!sym("country_iso"), !!sym("country_name")) %>%
-        collect()
+      countries_data <- setDT(pool::dbGetQuery(con,
+        "SELECT country_iso, country_name FROM countries"
+      ))
 
-      # Use import flow (trade_value_usd_imp) and partner_iso to identify exporters (more reliable)
-      d <- df_dtl() %>%
-        filter(!!sym("year") == min_year) %>%
-        inner_join(countries_data, by = c("partner_iso" = "country_iso")) %>%
-        group_by(!!sym("country_name")) %>%
-        summarise(trade_value_usd_imp = sum(!!sym("trade_value_usd_imp"), na.rm = TRUE), .groups = "drop") %>%
-        filter(!!sym("trade_value_usd_imp") > 0) %>%
-        mutate(country_name = fct_lump_n(
-          f = !!sym("country_name"),
-          n = 4,
-          w = !!sym("trade_value_usd_imp"),
-          other_level = "Rest of the world"
-        )) %>%
-        group_by(!!sym("country_name")) %>%
-        summarise(trade_value_usd_imp = sum(!!sym("trade_value_usd_imp"), na.rm = TRUE), .groups = "drop") %>%
-        mutate(country_name = factor(!!sym("country_name"),
-          levels = c(setdiff(unique(!!sym("country_name")), "Rest of the world"), "Rest of the world")
-        ))
+      # exporter column identifies the exporting country
+      d <- df_dtl()[year == min_year]
+      d <- merge(d, countries_data, by.x = "exporter", by.y = "country_iso")
+      d <- d[, .(trade_value_usd_imp = sum(trade_value_usd_imp, na.rm = TRUE)), by = .(country_name)]
+      d <- d[trade_value_usd_imp > 0]
 
-      # Convert values to billions for display and number top 4 + Rest of the world as 5
-      d <- d %>%
-        arrange(desc(!!sym("trade_value_usd_imp"))) %>%
-        mutate(rank = row_number())
+      setorder(d, -trade_value_usd_imp)
+      top4 <- d[seq_len(min(4L, .N)), country_name]
+      d[!(country_name %in% top4), country_name := "Rest of the world"]
+      d <- d[, .(trade_value_usd_imp = sum(trade_value_usd_imp, na.rm = TRUE)), by = .(country_name)]
 
-      d <- d %>% mutate(color = "#85cca6")
+      d[, color := "#85cca6"]
 
-      # Ensure Rest of the world is always present and set to position 5
-      d <- d %>%
-        filter(!!sym("country_name") == "Rest of the world") %>%
-        mutate(n = 5L) %>%
-        bind_rows(
-          d %>%
-            filter(!!sym("country_name") != "Rest of the world") %>%
-            arrange(desc(!!sym("trade_value_usd_imp"))) %>%
-            mutate(n = row_number())
-        ) %>%
-        mutate(
-          country_name = paste(!!sym("n"), !!sym("country_name"), sep = " - "),
-          trade_value_usd_imp = round(!!sym("trade_value_usd_imp") / 1e9, 2)
-        ) %>%
-        select(-!!sym("n"))
+      rest <- d[country_name == "Rest of the world"][, n := 5L]
+      others <- d[country_name != "Rest of the world"][order(-trade_value_usd_imp)][, n := .I]
+      d <- rbindlist(list(rest, others), fill = TRUE)
+      d[, country_name := paste(n, country_name, sep = " - ")]
+      d[, trade_value_usd_imp := round(trade_value_usd_imp / 1e9, 2)]
+      d[, n := NULL]
 
-      d3po(d) %>%
+      d3po(d) |>
         po_bar(
           daes(
             y = .data$country_name,
@@ -420,71 +337,47 @@ mod_products_server <- function(id) {
             color = .data$color,
             sort = "asc-y"
           )
-        ) %>%
+        ) |>
         po_labels(
           title = exp_col_min_yr_usd_tt(),
           y = "Country",
           x = "Trade Value (USD billion)"
-        ) %>%
-        po_format(x = format(.data$trade_value_usd_imp, big.mark = " ", scientific = FALSE, digits = 2)) %>%
-        po_tooltip("{country_name}: {trade_value_usd_imp} billion") %>%
-        po_background("transparent")
-    }) %>%
-      bindCache(inp_y(), inp_s(), inp_d()) %>%
+        ) |>
+        po_format(x = format(.data$trade_value_usd_imp, big.mark = " ", scientific = FALSE, digits = 2)) |>
+        po_tooltip("{country_name}: {trade_value_usd_imp} billion")
+
+    }) |>
+      bindCache(inp_y(), inp_s(), inp_d()) |>
       bindEvent(input$go)
 
     exp_col_max_yr_usd <- reactive({
       max_year <- max(inp_y())
 
-      # Get countries reference data
-      countries_data <- tbl(con, "countries") %>%
-        select(!!sym("country_iso"), !!sym("country_name")) %>%
-        collect()
+      countries_data <- setDT(pool::dbGetQuery(con,
+        "SELECT country_iso, country_name FROM countries"
+      ))
 
-      d <- df_dtl() %>%
-        filter(!!sym("year") == max_year) %>%
-        inner_join(countries_data, by = c("partner_iso" = "country_iso")) %>%
-        group_by(!!sym("country_name")) %>%
-        summarise(
-          trade_value_usd_imp = sum(!!sym("trade_value_usd_imp"), na.rm = TRUE),
-          .groups = "drop"
-        ) %>%
-        filter(!!sym("trade_value_usd_imp") > 0) %>%
-        mutate(country_name = fct_lump_n(
-          f = !!sym("country_name"),
-          n = 4,
-          w = !!sym("trade_value_usd_imp"),
-          other_level = "Rest of the world"
-        )) %>%
-        group_by(!!sym("country_name")) %>%
-        summarise(trade_value_usd_imp = sum(!!sym("trade_value_usd_imp"), na.rm = TRUE), .groups = "drop") %>%
-        mutate(country_name = factor(!!sym("country_name"),
-          levels = c(setdiff(unique(!!sym("country_name")), "Rest of the world"), "Rest of the world")
-        ))
+      # exporter column identifies the exporting country
+      d <- df_dtl()[year == max_year]
+      d <- merge(d, countries_data, by.x = "exporter", by.y = "country_iso")
+      d <- d[, .(trade_value_usd_imp = sum(trade_value_usd_imp, na.rm = TRUE)), by = .(country_name)]
+      d <- d[trade_value_usd_imp > 0]
 
-      d <- d %>%
-        arrange(desc(!!sym("trade_value_usd_imp"))) %>%
-        mutate(rank = row_number())
+      setorder(d, -trade_value_usd_imp)
+      top4 <- d[seq_len(min(4L, .N)), country_name]
+      d[!(country_name %in% top4), country_name := "Rest of the world"]
+      d <- d[, .(trade_value_usd_imp = sum(trade_value_usd_imp, na.rm = TRUE)), by = .(country_name)]
 
-      d <- d %>% mutate(color = "#67c090")
+      d[, color := "#67c090"]
 
-      # Ensure Rest of the world is always present and set to position 5
-      d <- d %>%
-        filter(!!sym("country_name") == "Rest of the world") %>%
-        mutate(n = 5L) %>%
-        bind_rows(
-          d %>%
-            filter(!!sym("country_name") != "Rest of the world") %>%
-            arrange(desc(!!sym("trade_value_usd_imp"))) %>%
-            mutate(n = row_number())
-        ) %>%
-        mutate(
-          country_name = paste(!!sym("n"), !!sym("country_name"), sep = " - "),
-          trade_value_usd_imp = round(!!sym("trade_value_usd_imp") / 1e9, 2)
-        ) %>%
-        select(-!!sym("n"))
+      rest <- d[country_name == "Rest of the world"][, n := 5L]
+      others <- d[country_name != "Rest of the world"][order(-trade_value_usd_imp)][, n := .I]
+      d <- rbindlist(list(rest, others), fill = TRUE)
+      d[, country_name := paste(n, country_name, sep = " - ")]
+      d[, trade_value_usd_imp := round(trade_value_usd_imp / 1e9, 2)]
+      d[, n := NULL]
 
-      d3po(d) %>%
+      d3po(d) |>
         po_bar(
           daes(
             y = .data$country_name,
@@ -492,17 +385,17 @@ mod_products_server <- function(id) {
             color = .data$color,
             sort = "asc-y"
           )
-        ) %>%
+        ) |>
         po_labels(
           title = exp_col_max_yr_usd_tt(),
           y = "Country",
           x = "Trade Value (USD billion)"
-        ) %>%
-        po_format(x = format(.data$trade_value_usd_imp, big.mark = " ", scientific = FALSE, digits = 2)) %>%
-        po_tooltip("{country_name}: {trade_value_usd_imp} billion") %>%
-        po_background("transparent")
-    }) %>%
-      bindCache(inp_y(), inp_s(), inp_d()) %>%
+        ) |>
+        po_format(x = format(.data$trade_value_usd_imp, big.mark = " ", scientific = FALSE, digits = 2)) |>
+        po_tooltip("{country_name}: {trade_value_usd_imp} billion")
+
+    }) |>
+      bindCache(inp_y(), inp_s(), inp_d()) |>
       bindEvent(input$go)
 
     exp_tt_min_yr <- eventReactive(input$go, {
@@ -510,32 +403,22 @@ mod_products_server <- function(id) {
     })
 
     exp_tm_dtl_min_yr <- reactive({
-      # Evaluate year locally to avoid reactive closure issues
       min_year <- min(inp_y())
 
-      # Get countries reference data
-      countries_data <- tbl(con, "countries") %>%
-        select(!!sym("country_iso"), !!sym("country_name"), !!sym("continent_name"), !!sym("continent_color")) %>%
-        collect()
+      countries_data <- setDT(pool::dbGetQuery(con,
+        "SELECT country_iso, country_name, continent_name, continent_color FROM countries"
+      ))
 
-      # Aggregate by countries instead of products for country treemap
-      # Use import flow (trade_value_usd_imp) and partner_iso to identify exporters (more reliable)
-      d <- df_dtl() %>%
-        filter(!!sym("year") == min_year) %>%
-        group_by(!!sym("partner_iso")) %>%
-        summarise(trade_value = sum(!!sym("trade_value_usd_imp"), na.rm = TRUE), .groups = "drop") %>%
-        # Join with countries table to get country names and continent info
-        inner_join(countries_data, by = c("partner_iso" = "country_iso"))
+      # exporter column identifies the exporting country
+      d <- df_dtl()[year == min_year, .(trade_value = sum(trade_value_usd_imp, na.rm = TRUE)), by = .(exporter)]
+      d <- merge(d, countries_data, by.x = "exporter", by.y = "country_iso")
 
-      # Create continent colors dataset
-      d2 <- d %>%
-        select(!!sym("continent_name"), country_color = !!sym("continent_color")) %>%
-        distinct() %>%
-        arrange(!!sym("continent_name"))
+      d2 <- unique(d[, .(continent_name, country_color = continent_color)])
+      setorder(d2, continent_name)
 
       od_treemap(d, d2, title = exp_tt_min_yr())
-    }) %>%
-      bindCache(inp_y(), inp_s(), inp_d()) %>%
+    }) |>
+      bindCache(inp_y(), inp_s(), inp_d()) |>
       bindEvent(input$go)
 
     exp_tt_max_yr <- eventReactive(input$go, {
@@ -543,32 +426,22 @@ mod_products_server <- function(id) {
     })
 
     exp_tm_dtl_max_yr <- reactive({
-      # Evaluate year locally to avoid reactive closure issues
       max_year <- max(inp_y())
 
-      # Get countries reference data
-      countries_data <- tbl(con, "countries") %>%
-        select(!!sym("country_iso"), !!sym("country_name"), !!sym("continent_name"), !!sym("continent_color")) %>%
-        collect()
+      countries_data <- setDT(pool::dbGetQuery(con,
+        "SELECT country_iso, country_name, continent_name, continent_color FROM countries"
+      ))
 
-      # Aggregate by countries instead of products for country treemap
-      # Use import flow (trade_value_usd_imp) and partner_iso to identify exporters (more reliable)
-      d <- df_dtl() %>%
-        filter(!!sym("year") == max_year) %>%
-        group_by(!!sym("partner_iso")) %>%
-        summarise(trade_value = sum(!!sym("trade_value_usd_imp"), na.rm = TRUE), .groups = "drop") %>%
-        # Join with countries table to get country names and continent info
-        inner_join(countries_data, by = c("partner_iso" = "country_iso"))
+      # exporter column identifies the exporting country
+      d <- df_dtl()[year == max_year, .(trade_value = sum(trade_value_usd_imp, na.rm = TRUE)), by = .(exporter)]
+      d <- merge(d, countries_data, by.x = "exporter", by.y = "country_iso")
 
-      # Create continent colors dataset
-      d2 <- d %>%
-        select(!!sym("continent_name"), country_color = !!sym("continent_color")) %>%
-        distinct() %>%
-        arrange(!!sym("continent_name"))
+      d2 <- unique(d[, .(continent_name, country_color = continent_color)])
+      setorder(d2, continent_name)
 
       od_treemap(d, d2, title = exp_tt_max_yr())
-    }) %>%
-      bindCache(inp_y(), inp_s(), inp_d()) %>%
+    }) |>
+      bindCache(inp_y(), inp_s(), inp_d()) |>
       bindEvent(input$go)
 
     ## Imports ----
@@ -590,56 +463,33 @@ mod_products_server <- function(id) {
 
     # Import column charts
     imp_col_min_yr_usd <- reactive({
-      # Evaluate year locally to avoid reactive closure issues
       min_year <- min(inp_y())
 
-      # Get countries reference data
-      countries_data <- tbl(con, "countries") %>%
-        select(!!sym("country_iso"), !!sym("country_name")) %>%
-        collect()
+      countries_data <- setDT(pool::dbGetQuery(con,
+        "SELECT country_iso, country_name FROM countries"
+      ))
 
-      # Use import flow (trade_value_usd_imp) and reporter_iso to identify importers (more reliable)
-      d <- df_dtl() %>%
-        filter(!!sym("year") == min_year) %>%
-        inner_join(countries_data, by = c("reporter_iso" = "country_iso")) %>%
-        group_by(!!sym("country_name")) %>%
-        summarise(trade_value_usd_imp = sum(!!sym("trade_value_usd_imp"), na.rm = TRUE), .groups = "drop") %>%
-        filter(!!sym("trade_value_usd_imp") > 0) %>%
-        mutate(country_name = fct_lump_n(
-          f = !!sym("country_name"),
-          n = 4,
-          w = !!sym("trade_value_usd_imp"),
-          other_level = "Rest of the world"
-        )) %>%
-        group_by(!!sym("country_name")) %>%
-        summarise(trade_value_usd_imp = sum(!!sym("trade_value_usd_imp"), na.rm = TRUE), .groups = "drop") %>%
-        mutate(country_name = factor(!!sym("country_name"),
-          levels = c(setdiff(unique(!!sym("country_name")), "Rest of the world"), "Rest of the world")
-        ))
+      # importer column identifies the importing country
+      d <- df_dtl()[year == min_year]
+      d <- merge(d, countries_data, by.x = "importer", by.y = "country_iso")
+      d <- d[, .(trade_value_usd_imp = sum(trade_value_usd_imp, na.rm = TRUE)), by = .(country_name)]
+      d <- d[trade_value_usd_imp > 0]
 
-      d <- d %>%
-        arrange(desc(!!sym("trade_value_usd_imp"))) %>%
-        mutate(rank = row_number())
+      setorder(d, -trade_value_usd_imp)
+      top4 <- d[seq_len(min(4L, .N)), country_name]
+      d[!(country_name %in% top4), country_name := "Rest of the world"]
+      d <- d[, .(trade_value_usd_imp = sum(trade_value_usd_imp, na.rm = TRUE)), by = .(country_name)]
 
-      d <- d %>% mutate(color = "#518498")
+      d[, color := "#518498"]
 
-      # Ensure Rest of the world is always present and set to position 5
-      d <- d %>%
-        filter(!!sym("country_name") == "Rest of the world") %>%
-        mutate(n = 5L) %>%
-        bind_rows(
-          d %>%
-            filter(!!sym("country_name") != "Rest of the world") %>%
-            arrange(desc(!!sym("trade_value_usd_imp"))) %>%
-            mutate(n = row_number())
-        ) %>%
-        mutate(
-          country_name = paste(!!sym("n"), !!sym("country_name"), sep = " - "),
-          trade_value_usd_imp = round(!!sym("trade_value_usd_imp") / 1e9, 2)
-        ) %>%
-        select(-!!sym("n"))
+      rest <- d[country_name == "Rest of the world"][, n := 5L]
+      others <- d[country_name != "Rest of the world"][order(-trade_value_usd_imp)][, n := .I]
+      d <- rbindlist(list(rest, others), fill = TRUE)
+      d[, country_name := paste(n, country_name, sep = " - ")]
+      d[, trade_value_usd_imp := round(trade_value_usd_imp / 1e9, 2)]
+      d[, n := NULL]
 
-      d3po(d) %>%
+      d3po(d) |>
         po_bar(
           daes(
             y = .data$country_name,
@@ -647,77 +497,47 @@ mod_products_server <- function(id) {
             color = .data$color,
             sort = "asc-y"
           )
-        ) %>%
+        ) |>
         po_labels(
           title = imp_col_min_yr_usd_tt(),
           y = "Country",
           x = "Trade Value (USD billion)"
-        ) %>%
-        po_format(x = format(.data$trade_value_usd_imp, big.mark = " ", scientific = FALSE, digits = 2)) %>%
-        po_tooltip("{country_name}: {trade_value_usd_imp} billion") %>%
-        po_background("transparent")
-    }) %>%
-      bindCache(inp_y(), inp_s(), inp_d()) %>%
+        ) |>
+        po_format(x = format(.data$trade_value_usd_imp, big.mark = " ", scientific = FALSE, digits = 2)) |>
+        po_tooltip("{country_name}: {trade_value_usd_imp} billion")
+
+    }) |>
+      bindCache(inp_y(), inp_s(), inp_d()) |>
       bindEvent(input$go)
 
     imp_col_max_yr_usd <- reactive({
-      # Evaluate year locally to avoid reactive closure issues
       max_year <- max(inp_y())
 
-      # Get countries reference data
-      countries_data <- tbl(con, "countries") %>%
-        select(!!sym("country_iso"), !!sym("country_name")) %>%
-        collect()
+      countries_data <- setDT(pool::dbGetQuery(con,
+        "SELECT country_iso, country_name FROM countries"
+      ))
 
-      d <- df_dtl() %>%
-        filter(!!sym("year") == max_year) %>%
-        inner_join(countries_data, by = c("reporter_iso" = "country_iso")) %>%
-        group_by(!!sym("country_name")) %>%
-        summarise(
-          trade_value_usd_imp = sum(!!sym("trade_value_usd_imp"), na.rm = TRUE),
-          .groups = "drop"
-        ) %>%
-        filter(!!sym("trade_value_usd_imp") > 0) %>%
-        mutate(country_name = fct_lump_n(
-          f = !!sym("country_name"),
-          n = 4,
-          w = !!sym("trade_value_usd_imp"),
-          other_level = "Rest of the world"
-        )) %>%
-        group_by(!!sym("country_name")) %>%
-        summarise(
-          trade_value_usd_imp = sum(!!sym("trade_value_usd_imp"), na.rm = TRUE),
-          .groups = "drop"
-        ) %>%
-        mutate(
-          country_name = factor(!!sym("country_name"),
-            levels = c(setdiff(unique(!!sym("country_name")), "Rest of the world"), "Rest of the world")
-          )
-        )
+      # importer column identifies the importing country
+      d <- df_dtl()[year == max_year]
+      d <- merge(d, countries_data, by.x = "importer", by.y = "country_iso")
+      d <- d[, .(trade_value_usd_imp = sum(trade_value_usd_imp, na.rm = TRUE)), by = .(country_name)]
+      d <- d[trade_value_usd_imp > 0]
 
-      d <- d %>%
-        arrange(desc(!!sym("trade_value_usd_imp"))) %>%
-        mutate(rank = row_number())
+      setorder(d, -trade_value_usd_imp)
+      top4 <- d[seq_len(min(4L, .N)), country_name]
+      d[!(country_name %in% top4), country_name := "Rest of the world"]
+      d <- d[, .(trade_value_usd_imp = sum(trade_value_usd_imp, na.rm = TRUE)), by = .(country_name)]
 
-      d <- d %>% mutate(color = "#26667f")
+      d[, color := "#26667f"]
 
-      # Ensure Rest of the world is always present and set to position 5
-      d <- d %>%
-        filter(!!sym("country_name") == "Rest of the world") %>%
-        mutate(n = 5L) %>%
-        bind_rows(
-          d %>%
-            filter(!!sym("country_name") != "Rest of the world") %>%
-            arrange(desc(!!sym("trade_value_usd_imp"))) %>%
-            mutate(n = row_number())
-        ) %>%
-        mutate(
-          country_name = paste(!!sym("n"), !!sym("country_name"), sep = " - "),
-          trade_value_billion = round(!!sym("trade_value_usd_imp") / 1e9, 2)
-        ) %>%
-        select(-!!sym("n"))
+      rest <- d[country_name == "Rest of the world"][, n := 5L]
+      others <- d[country_name != "Rest of the world"][order(-trade_value_usd_imp)][, n := .I]
+      d <- rbindlist(list(rest, others), fill = TRUE)
+      d[, country_name := paste(n, country_name, sep = " - ")]
+      d[, trade_value_billion := round(trade_value_usd_imp / 1e9, 2)]
+      d[, n := NULL]
 
-      d3po(d) %>%
+      d3po(d) |>
         po_bar(
           daes(
             y = .data$country_name,
@@ -725,17 +545,17 @@ mod_products_server <- function(id) {
             color = .data$color,
             sort = "asc-y"
           )
-        ) %>%
+        ) |>
         po_labels(
           title = imp_col_max_yr_usd_tt(),
           y = "Country",
           x = "Trade Value (USD billion)"
-        ) %>%
-        po_format(x = format(.data$trade_value_billion, big.mark = " ", scientific = FALSE, digits = 2)) %>%
-        po_tooltip("{country_name}: {trade_value_billion} billion") %>%
-        po_background("transparent")
-    }) %>%
-      bindCache(inp_y(), inp_s(), inp_d()) %>%
+        ) |>
+        po_format(x = format(.data$trade_value_billion, big.mark = " ", scientific = FALSE, digits = 2)) |>
+        po_tooltip("{country_name}: {trade_value_billion} billion")
+
+    }) |>
+      bindCache(inp_y(), inp_s(), inp_d()) |>
       bindEvent(input$go)
 
     imp_tt_min_yr <- eventReactive(input$go, {
@@ -743,32 +563,22 @@ mod_products_server <- function(id) {
     })
 
     imp_tm_dtl_min_yr <- reactive({
-      # Evaluate year locally to avoid reactive closure issues
       min_year <- min(inp_y())
 
-      # Get countries reference data
-      countries_data <- tbl(con, "countries") %>%
-        select(!!sym("country_iso"), !!sym("country_name"), !!sym("continent_name"), !!sym("continent_color")) %>%
-        collect()
+      countries_data <- setDT(pool::dbGetQuery(con,
+        "SELECT country_iso, country_name, continent_name, continent_color FROM countries"
+      ))
 
-      # Aggregate by countries instead of products for country treemap
-      # Use import flow (trade_value_usd_imp) and reporter_iso to identify importers (more reliable)
-      d <- df_dtl() %>%
-        filter(!!sym("year") == min_year) %>%
-        group_by(!!sym("reporter_iso")) %>%
-        summarise(trade_value = sum(!!sym("trade_value_usd_imp"), na.rm = TRUE), .groups = "drop") %>%
-        # Join with countries table to get country names and continent info
-        inner_join(countries_data, by = c("reporter_iso" = "country_iso"))
+      # importer column identifies the importing country
+      d <- df_dtl()[year == min_year, .(trade_value = sum(trade_value_usd_imp, na.rm = TRUE)), by = .(importer)]
+      d <- merge(d, countries_data, by.x = "importer", by.y = "country_iso")
 
-      # Create continent colors dataset
-      d2 <- d %>%
-        select(!!sym("continent_name"), country_color = !!sym("continent_color")) %>%
-        distinct() %>%
-        arrange(!!sym("continent_name"))
+      d2 <- unique(d[, .(continent_name, country_color = continent_color)])
+      setorder(d2, continent_name)
 
       od_treemap(d, d2, title = imp_tt_min_yr())
-    }) %>%
-      bindCache(inp_y(), inp_s(), inp_d()) %>%
+    }) |>
+      bindCache(inp_y(), inp_s(), inp_d()) |>
       bindEvent(input$go)
 
     imp_tt_max_yr <- eventReactive(input$go, {
@@ -776,39 +586,26 @@ mod_products_server <- function(id) {
     })
 
     imp_tm_dtl_max_yr <- reactive({
-      # Evaluate year locally to avoid reactive closure issues
       max_year <- max(inp_y())
 
-      # Get countries reference data
-      countries_data <- tbl(con, "countries") %>%
-        select(!!sym("country_iso"), !!sym("country_name"), !!sym("continent_name"), !!sym("continent_color")) %>%
-        collect()
+      countries_data <- setDT(pool::dbGetQuery(con,
+        "SELECT country_iso, country_name, continent_name, continent_color FROM countries"
+      ))
 
-      # Aggregate by countries instead of products for country treemap
-      # Use import flow (trade_value_usd_imp) and reporter_iso to identify importers (more reliable)
-      d <- df_dtl() %>%
-        filter(!!sym("year") == max_year) %>%
-        group_by(!!sym("reporter_iso")) %>%
-        summarise(
-          trade_value = sum(!!sym("trade_value_usd_imp"), na.rm = TRUE),
-          .groups = "drop"
-        ) %>%
-        # Join with countries table to get country names and continent info
-        inner_join(countries_data, by = c("reporter_iso" = "country_iso"))
+      # importer column identifies the importing country
+      d <- df_dtl()[year == max_year, .(trade_value = sum(trade_value_usd_imp, na.rm = TRUE)), by = .(importer)]
+      d <- merge(d, countries_data, by.x = "importer", by.y = "country_iso")
 
-      # Create continent colors dataset
-      d2 <- d %>%
-        select(!!sym("continent_name"), country_color = !!sym("continent_color")) %>%
-        distinct() %>%
-        arrange(!!sym("continent_name"))
+      d2 <- unique(d[, .(continent_name, country_color = continent_color)])
+      setorder(d2, continent_name)
 
       out <- od_treemap(d, d2, title = imp_tt_max_yr())
 
       session$sendCustomMessage("hideProgress", list())
 
       return(out)
-    }) %>%
-      bindCache(inp_y(), inp_s(), inp_d()) %>%
+    }) |>
+      bindCache(inp_y(), inp_s(), inp_d()) |>
       bindEvent(input$go)
 
     # Additional processing functions can be added here
