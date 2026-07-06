@@ -72,35 +72,36 @@ mod_countries_server <- function(id) {
       years <- inp_y()
       reporter <- inp_r()
       partner <- inp_p()
-      year_in <- paste(as.integer(years), collapse = ",")
+      min_yr <- as.integer(min(years))
+      max_yr <- as.integer(max(years))
       r <- gsub("'", "''", reporter)
 
       if (partner == "ALL") {
         d_exp <- setDT(pool::dbGetQuery(con, sprintf(
           "SELECT year, SUM(trade) AS trade_value_usd_exp
-           FROM %s WHERE year IN (%s) AND exporter_iso3_dynamic = '%s'
+           FROM %s WHERE year BETWEEN %d AND %d AND exporter_iso3_dynamic = '%s'
            GROUP BY year",
-          tbl_agg, year_in, r
+          tbl_agg, min_yr, max_yr, r
         )))
         d_imp <- setDT(pool::dbGetQuery(con, sprintf(
           "SELECT year, SUM(trade) AS trade_value_usd_imp
-           FROM %s WHERE year IN (%s) AND importer_iso3_dynamic = '%s'
+           FROM %s WHERE year BETWEEN %d AND %d AND importer_iso3_dynamic = '%s'
            GROUP BY year",
-          tbl_agg, year_in, r
+          tbl_agg, min_yr, max_yr, r
         )))
       } else {
         p <- gsub("'", "''", partner)
         d_exp <- setDT(pool::dbGetQuery(con, sprintf(
           "SELECT year, SUM(trade) AS trade_value_usd_exp
-           FROM %s WHERE year IN (%s) AND exporter_iso3_dynamic = '%s' AND importer_iso3_dynamic = '%s'
+           FROM %s WHERE year BETWEEN %d AND %d AND exporter_iso3_dynamic = '%s' AND importer_iso3_dynamic = '%s'
            GROUP BY year",
-          tbl_agg, year_in, r, p
+          tbl_agg, min_yr, max_yr, r, p
         )))
         d_imp <- setDT(pool::dbGetQuery(con, sprintf(
           "SELECT year, SUM(trade) AS trade_value_usd_imp
-           FROM %s WHERE year IN (%s) AND importer_iso3_dynamic = '%s' AND exporter_iso3_dynamic = '%s'
+           FROM %s WHERE year BETWEEN %d AND %d AND importer_iso3_dynamic = '%s' AND exporter_iso3_dynamic = '%s'
            GROUP BY year",
-          tbl_agg, year_in, r, p
+          tbl_agg, min_yr, max_yr, r, p
         )))
       }
 
@@ -667,11 +668,11 @@ mod_countries_server <- function(id) {
     })
 
     trd_exc_columns_agg <- reactive({
-      d_vals <- trade_values()
+      d_all <- df_agg()
 
       d <- rbindlist(list(
-        data.table(year = d_vals$year, trade = round(d_vals$trade_value_usd_exp / 1e9, 2), flow = "Exports"),
-        data.table(year = d_vals$year, trade = round(d_vals$trade_value_usd_imp / 1e9, 2), flow = "Imports")
+        data.table(year = d_all$year, trade = round(d_all$trade_value_usd_exp / 1e9, 2), flow = "Exports"),
+        data.table(year = d_all$year, trade = round(d_all$trade_value_usd_imp / 1e9, 2), flow = "Imports")
       ))
       d[, `:=`(year = as.character(year), color = fifelse(flow == "Exports", "#67c090", "#26667f"))]
 

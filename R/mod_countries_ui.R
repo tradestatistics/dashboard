@@ -10,7 +10,7 @@ mod_countries_ui <- function(id) {
         col_12(
           h2("Filter"),
           fluidRow(
-            col_3(
+            col_4(
               sliderInput(
                 ns("y"),
                 "Years",
@@ -23,7 +23,7 @@ mod_countries_ui <- function(id) {
                 width = "100%"
               )
             ),
-            col_3(
+            col_4(
               selectInput(
                 ns("r"),
                 "Reporter",
@@ -35,7 +35,7 @@ mod_countries_ui <- function(id) {
                 width = "100%"
               )
             ),
-            col_3(
+            col_4(
               selectInput(
                 ns("p"),
                 "Partner",
@@ -46,16 +46,6 @@ mod_countries_ui <- function(id) {
                   ])
                 ),
                 selected = "ALL",
-                selectize = TRUE,
-                width = "100%"
-              )
-            ),
-            col_3(
-              selectInput(
-                ns("d"),
-                "Convert dollars to a fixed year",
-                choices = c("No", available_yrs_deflator()),
-                selected = "",
                 selectize = TRUE,
                 width = "100%"
               )
