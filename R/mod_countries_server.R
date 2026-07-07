@@ -164,13 +164,13 @@ mod_countries_server <- function(id) {
 
       if (exporter == "ALL") {
         d <- setDT(pool::dbGetQuery(con, sprintf(
-          "SELECT year, exporter_iso3_dynamic, importer_iso3_dynamic, industry_id, broad_sector_id, trade * 1000000 AS trade FROM %s WHERE year BETWEEN %d AND %d AND (importer_iso3_dynamic = '%s' OR exporter_iso3_dynamic = '%s') AND importer_iso3_dynamic != exporter_iso3_dynamic",
+          "SELECT year, importer_iso3_dynamic AS importer, exporter_iso3_dynamic AS exporter, industry_id, broad_sector_id, trade * 1000000 AS trade FROM %s WHERE year BETWEEN %d AND %d AND (importer_iso3_dynamic = '%s' OR exporter_iso3_dynamic = '%s') AND importer_iso3_dynamic != exporter_iso3_dynamic",
           tbl_dtl(), min_yr, max_yr, e, e
         )))
       } else {
         i <- gsub("'", "''", exporter)
         d <- setDT(pool::dbGetQuery(con, sprintf(
-          "SELECT year, exporter_iso3_dynamic, importer_iso3_dynamic, industry_id, broad_sector_id, trade * 1000000 AS trade FROM %s WHERE year BETWEEN %d AND %d AND (
+          "SELECT year, importer_iso3_dynamic AS importer, exporter_iso3_dynamic AS exporter, industry_id, broad_sector_id, trade * 1000000 AS trade FROM %s WHERE year BETWEEN %d AND %d AND (
             (importer_iso3_dynamic = '%s' AND exporter_iso3_dynamic = '%s') OR
             (importer_iso3_dynamic = '%s' AND exporter_iso3_dynamic = '%s')
           ) AND importer_iso3_dynamic != exporter_iso3_dynamic",
@@ -708,11 +708,11 @@ mod_countries_server <- function(id) {
     })
 
     exp_tm_dtl_min_yr <- reactive({
-      importer <- inp_i()
+      reporter <- inp_i()
       dtl <- df_dtl()
       actual_min_yr <- min(dtl$year, na.rm = TRUE)
       d <- p_aggregate_by_sector(
-        dtl[year == actual_min_yr & exporter_iso3_dynamic == importer],
+        dtl[year == actual_min_yr & exporter == reporter],
         col = "trade", con = con
       )
       d2 <- p_colors(d, con = con)
@@ -726,11 +726,11 @@ mod_countries_server <- function(id) {
     })
 
     exp_tm_dtl_max_yr <- reactive({
-      importer <- inp_i()
+      reporter <- inp_i()
       dtl <- df_dtl()
       actual_max_yr <- max(dtl$year, na.rm = TRUE)
       d <- p_aggregate_by_sector(
-        dtl[year == actual_max_yr & exporter_iso3_dynamic == importer],
+        dtl[year == actual_max_yr & exporter == reporter],
         col = "trade", con = con
       )
       d2 <- p_colors(d, con = con)
@@ -803,11 +803,11 @@ mod_countries_server <- function(id) {
       bindEvent(input$go)
 
     imp_tm_dtl_min_yr <- reactive({
-      importer <- inp_i()
+      reporter <- inp_i()
       dtl <- df_dtl()
       actual_min_yr <- min(dtl$year, na.rm = TRUE)
       d <- p_aggregate_by_sector(
-        dtl[year == actual_min_yr & importer_iso3_dynamic == importer],
+        dtl[year == actual_min_yr & importer == reporter],
         col = "trade", con = con
       )
       d2 <- p_colors(d, con = con)
@@ -821,11 +821,11 @@ mod_countries_server <- function(id) {
     })
 
     imp_tm_dtl_max_yr <- reactive({
-      importer <- inp_i()
+      reporter <- inp_i()
       dtl <- df_dtl()
       actual_max_yr <- max(dtl$year, na.rm = TRUE)
       d <- p_aggregate_by_sector(
-        dtl[year == actual_max_yr & importer_iso3_dynamic == importer],
+        dtl[year == actual_max_yr & importer == reporter],
         col = "trade", con = con
       )
       d2 <- p_colors(d, con = con)
