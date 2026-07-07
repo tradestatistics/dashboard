@@ -21,16 +21,13 @@ Imports:
     golem (>= 0.3.2),
     htmlwidgets,
     jsonlite,
-    magrittr,
     pool,
     rio (>= 0.5.29),
-    rlang (>= 1.0.2),
     RPostgres,
     shiny (>= 1.7.1),
     shinyjs (>= 2.1.0),
     stats,
-    tabler,
-    tidyr (>= 1.2.0)
+    tabler
 Suggests: 
     spelling (>= 2.2),
     testthat (>= 3.0.0)

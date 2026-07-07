@@ -15,8 +15,21 @@
 #' @importFrom shiny NS tagList HTML fluidRow selectInput sliderInput actionButton htmlOutput uiOutput h2 tags div moduleServer reactive eventReactive observe observeEvent renderText renderUI updateSelectizeInput downloadHandler req shinyApp
 #' @importFrom shinyjs hide hidden show useShinyjs
 #' @importFrom stats setNames
-#' @importFrom tidyr pivot_longer
 "_PACKAGE"
+
+utils::globalVariables(c(
+  ".", ".data",
+  "bal_rank", "broad_sector", "broad_sector_id",
+  "color", "commodity_name", "continent_name", "country", "country_color", "country_name",
+  "exp_pct", "exp_share", "exporter", "exporter_iso3_dynamic",
+  "flow",
+  "imp_pct", "imp_share", "importer", "industry_id",
+  "n",
+  "region_colour",
+  "sector_color", "sum_trade_value",
+  "trade", "trade_exp", "trade_imp", "trade_value", "trd_value_usd_bal",
+  "year"
+))
 
 shinyOptions(
   cache = cache_disk(
@@ -25,47 +38,29 @@ shinyOptions(
   )
 )
 
-#' reporters_display
+#' countries
 #'
 #' Internal dataset for country codes.
 #'
 #' @docType data
 #' @keywords datasets
-#' @name reporters_display
+#' @name countries
 NULL
 
-#' sections_display
+#' sectors
 #'
 #' Internal dataset for section/commodity codes.
 #'
 #' @docType data
 #' @keywords datasets
-#' @name sections_display
+#' @name sectors
 NULL
 
-#' commodities
+#' industries
 #'
 #' Internal dataset for commodity codes (6,898 codes).
 #'
 #' @docType data
 #' @keywords datasets
-#' @name commodities
-NULL
-
-#' commodities_display
-#'
-#' Internal dataset for commodity codes (6,898 codes).
-#'
-#' @docType data
-#' @keywords datasets
-#' @name commodities_display
-NULL
-
-#' commodities_short_display
-#'
-#' Internal dataset for commodity codes (1,363 codes).
-#'
-#' @docType data
-#' @keywords datasets
-#' @name commodities_short_display
+#' @name industries
 NULL

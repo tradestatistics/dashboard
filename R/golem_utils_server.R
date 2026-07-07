@@ -3,11 +3,11 @@ available_formats <- function() {
   c("csv", "tsv", "xlsx", "sav", "dta")
 }
 
-# Read credentials from file excluded in .gitignore
-readRenviron("/tradestatistics/credentials.txt")
-
 #' @title SQL connection
 sql_con <- function() {
+  # Read credentials from file excluded in .gitignore
+  readRenviron("/tradestatistics/credentials.txt")
+
   dbPool(
     drv = Postgres(),
     dbname = Sys.getenv("TRADESTATISTICS_SQL_NAME"),
@@ -69,7 +69,7 @@ od_treemap <- function(d, d2, title = NULL) {
   colors_join <- copy(d2)[, .(continent_name, color = country_color)]
   dd <- merge(dd, colors_join, by = "continent_name", all.x = TRUE)
 
-  d3po(dd) %>%
+  d3po(dd) |>
     po_treemap(
       daes(
         size = .data$trade_value,
@@ -78,7 +78,7 @@ od_treemap <- function(d, d2, title = NULL) {
         color = .data$color,
         tiling = "binary"
       )
-    ) %>%
+    ) |>
     po_labels(
       align = "left-top",
       title = title,
@@ -112,7 +112,7 @@ od_treemap <- function(d, d2, title = NULL) {
           return subgroup + '<br/>' + value + '<br/>' + pct;
         }"
       )
-    ) %>%
+    ) |>
     po_tooltip(JS(
       "function(percentage, row) {
         var pct = (percentage).toFixed(2) + '%';
@@ -248,7 +248,7 @@ p_treemap <- function(d, d2, title = NULL) {
   colors_join <- copy(d2)[, .(broad_sector, color = sector_color)]
   dd <- merge(dd, colors_join, by = "broad_sector", all.x = TRUE)
 
-  d3po(dd) %>%
+  d3po(dd) |>
     po_treemap(
       daes(
         size = .data$trade_value,
@@ -257,7 +257,7 @@ p_treemap <- function(d, d2, title = NULL) {
         color = .data$color,
         tiling = "binary"
       )
-    ) %>%
+    ) |>
     po_labels(
       align = "left-top",
       title = title,
@@ -301,7 +301,7 @@ p_treemap <- function(d, d2, title = NULL) {
           return commodity + '<br/>' + value + '<br/>' + pct;
         }"
       )
-    ) %>%
+    ) |>
     po_tooltip(JS(
       "function(percentage, row) {
         var pct = (percentage).toFixed(2) + '%';
