@@ -31,8 +31,8 @@ app_ui <- function(request) {
             mod_countries_ui("co")
           ),
           tab_item(
-            tab_name = "pr",
-            mod_sectors_ui("pr")
+            tab_name = "se",
+            mod_sectors_ui("se")
           ),
           tab_item(
             tab_name = "cite",

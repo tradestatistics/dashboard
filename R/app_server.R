@@ -13,7 +13,7 @@ app_server <- function(input, output, session) {
     # strip shiny related URL parameters
     rvtl(input)
     setBookmarkExclude(c(
-      "co-fmt", "pr-fmt", "waiter_shown", "waiter-content_waiter_hidden", "co-go", "pr-go"
+      "co-fmt", "se-fmt", "waiter_shown", "waiter-content_waiter_hidden", "co-go", "se-go"
     ))
     session$doBookmark()
   })
