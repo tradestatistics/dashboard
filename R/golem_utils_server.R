@@ -3,6 +3,9 @@ available_formats <- function() {
   c("csv", "tsv", "xlsx", "sav", "dta")
 }
 
+# Read credentials from file excluded in .gitignore
+readRenviron("/tradestatistics/credentials.txt")
+
 #' @title SQL connection
 sql_con <- function() {
   dbPool(
@@ -41,39 +44,30 @@ ensure_cols <- function(df, cols) {
 #' @param d2 input dataset for colours
 #' @param title title for the treemap
 od_treemap <- function(d, d2, title = NULL) {
-  dd <- d %>%
-    mutate(
-      continent_name = factor(!!sym("continent_name"),
-        levels = d2$continent_name
-      )
-    ) %>%
-    arrange(!!sym("continent_name"))
+  d <- setDT(copy(d))
+  d2 <- setDT(copy(d2))
 
-  new_lvls <- dd %>%
-    group_by(!!sym("continent_name"), !!sym("country_name")) %>%
-    summarise(trade_value = sum(!!sym("trade_value"), na.rm = TRUE), .groups = "drop") %>%
-    mutate_if(is.factor, as.character) %>%
-    arrange(desc(!!sym("trade_value"))) %>%
-    distinct(!!sym("continent_name")) %>%
-    pull(!!sym("continent_name"))
+  if (nrow(d) == 0L || nrow(d2) == 0L || !("continent_name" %in% names(d))) return(NULL)
 
-  new_colors <- d2 %>%
-    mutate(
-      continent_name = factor(!!sym("continent_name"),
-        levels = new_lvls
-      )
-    ) %>%
-    arrange(!!sym("continent_name")) %>%
-    pull(!!sym("country_color"))
+  d$continent_name <- factor(d$continent_name, levels = d2$continent_name)
+  setorder(d, continent_name)
 
-  dd <- dd %>%
-    group_by(!!sym("continent_name"), !!sym("country_name")) %>%
-    summarise(trade_value = sum(!!sym("trade_value"), na.rm = TRUE), .groups = "drop") %>%
-    left_join(
-      d2 %>%
-        rename(color = !!sym("country_color")),
-      by = "continent_name"
-    )
+  # Compute level order by total trade value
+  lvl_dt <- d[, .(trade_value = sum(trade_value, na.rm = TRUE)), by = .(continent_name, country_name)]
+  lvl_dt$continent_name <- as.character(lvl_dt$continent_name)
+  setorder(lvl_dt, -trade_value)
+  new_lvls <- unique(lvl_dt$continent_name)
+
+  # Build ordered colors vector
+  d2_ord <- copy(d2)
+  d2_ord$continent_name <- factor(d2_ord$continent_name, levels = new_lvls)
+  setorder(d2_ord, continent_name)
+  new_colors <- d2_ord$country_color
+
+  # Aggregate dd and join colors
+  dd <- d[, .(trade_value = sum(trade_value, na.rm = TRUE)), by = .(continent_name, country_name)]
+  colors_join <- copy(d2)[, .(continent_name, color = country_color)]
+  dd <- merge(dd, colors_join, by = "continent_name", all.x = TRUE)
 
   d3po(dd) %>%
     po_treemap(
@@ -155,8 +149,8 @@ od_treemap <- function(d, d2, title = NULL) {
 
         return '<b>' + subgroup + '</b><br/>Value: ' + value + '<br/>Percentage: ' + pct;
       }"
-    )) %>%
-    po_background("transparent")
+    ))
+
 }
 
 # PRODUCT TREEMAPS ----
@@ -165,37 +159,24 @@ od_treemap <- function(d, d2, title = NULL) {
 #' @param d input dataset
 #' @param col column to collapse
 #' @param con SQL connection
-p_aggregate_by_section <- function(d, col, con) {
-  d <- d %>%
-    select(!!sym("commodity_code"), !!sym("section_code"), !!sym(col)) %>%
-    rename(trade_value = !!sym(col))
+p_aggregate_by_sector <- function(d, col, con) {
+  d <- setDT(copy(d))
+  d <- d[, c("industry_id", "broad_sector_id", col), with = FALSE]
+  setnames(d, col, "trade_value")
 
   d <- p_aggregate_products(d, con = con)
 
-  d <- d %>%
-    group_by(!!sym("section_name"), !!sym("commodity_name")) %>%
-    summarise(trade_value = sum(!!sym("trade_value"), na.rm = T), .groups = "drop") %>%
-    ungroup()
+  d <- d[, .(trade_value = sum(trade_value, na.rm = TRUE)), by = .(broad_sector, commodity_name)]
 
-  d <- d %>%
-    select(!!sym("section_name"), !!sym("commodity_name"), !!sym("trade_value")) %>%
-    group_by(!!sym("section_name")) %>%
-    mutate(sum_trade_value = sum(!!sym("trade_value"), na.rm = T)) %>%
-    ungroup() %>%
-    arrange(-!!sym("sum_trade_value")) %>%
-    select(-!!sym("sum_trade_value"))
+  d[, sum_trade_value := sum(trade_value, na.rm = TRUE), by = .(broad_sector)]
+  setorder(d, -sum_trade_value)
+  d[, sum_trade_value := NULL]
 
-  d <- map_df(
-    d %>%
-      select(!!sym("section_name")) %>%
-      distinct() %>%
-      pull(),
-    function(s) {
-      d %>%
-        filter(!!sym("section_name") == s) %>%
-        arrange(-!!sym("trade_value"))
-    }
-  )
+  sections <- unique(d[["broad_sector"]])
+  if (length(sections) == 0L) return(d)
+  d <- rbindlist(lapply(sections, function(s) {
+    setorder(d[broad_sector == s], -trade_value)
+  }))
 
   return(d)
 }
@@ -204,48 +185,37 @@ p_aggregate_by_section <- function(d, col, con) {
 #' @param d input dataset
 #' @param con SQL connection
 p_colors <- function(d, con) {
-  d %>%
-    distinct(!!sym("section_name")) %>%
-    inner_join(
-      tbl(con, "commodities") %>%
-        select(
-          !!sym("section_code"),
-          !!sym("section_name"),
-          !!sym("section_color")
-        ) %>%
-        distinct() %>%
-        collect(),
-      by = "section_name"
-    )
+  d <- setDT(copy(d))
+  if (!("broad_sector" %in% names(d)) || nrow(d) == 0L) return(data.table())
+  sectors <- unique(d[["broad_sector"]])
+  colors_ref <- setDT(pool::dbGetQuery(con,
+    "SELECT s.broad_sector AS broad_sector, c.colour AS sector_color
+     FROM itpd_sectors s JOIN itpd_colours c ON s.broad_sector_id = c.broad_sector_id"
+  ))
+  colors_ref[broad_sector %in% sectors]
 }
 
 #' @title Aggregate Products
 #' @param d input dataset
 #' @param con SQL connection
 p_aggregate_products <- function(d, con) {
-  # Get all commodity data in one query to avoid multiple database hits
-  commodities_data <- tbl(con, "commodities") %>%
-    select(
-      !!sym("commodity_code"), !!sym("commodity_code_short"), !!sym("section_code"),
-      !!sym("section_color"), !!sym("section_name")
-    ) %>%
-    left_join(
-      tbl(con, "commodities_short") %>%
-        select(!!sym("commodity_code"),
-          commodity_name = !!sym("commodity_name")
-        ),
-      by = c("commodity_code_short" = "commodity_code")
-    ) %>%
-    collect()
+  industries_ref <- setDT(pool::dbGetQuery(con,
+    "SELECT industry_id, industry_descr AS commodity_name FROM itpd_industries"
+  ))
+  sectors_ref <- setDT(pool::dbGetQuery(con,
+    "SELECT broad_sector_id, broad_sector AS broad_sector FROM itpd_sectors"
+  ))
+  colours_ref <- setDT(pool::dbGetQuery(con,
+    "SELECT broad_sector_id, colour AS sector_color FROM itpd_colours"
+  ))
 
-  d %>%
-    inner_join(commodities_data, by = c("commodity_code", "section_code")) %>%
-    group_by(
-      !!sym("commodity_code"), !!sym("commodity_code_short"), !!sym("section_code"),
-      !!sym("section_color"), !!sym("section_name"), !!sym("commodity_name")
-    ) %>%
-    summarise(trade_value = sum(!!sym("trade_value"), na.rm = T), .groups = "drop") %>%
-    ungroup()
+  d <- setDT(copy(d))
+  d <- merge(d, industries_ref, by = "industry_id")
+  d <- merge(d, sectors_ref, by = "broad_sector_id")
+  d <- merge(d, colours_ref, by = "broad_sector_id")
+  d <- d[, .(trade_value = sum(trade_value, na.rm = TRUE)),
+         by = .(industry_id, broad_sector_id, sector_color, broad_sector, commodity_name)]
+  return(d)
 }
 
 #' @title Product Treemap
@@ -253,40 +223,36 @@ p_aggregate_products <- function(d, con) {
 #' @param d2 input dataset for colours
 #' @param title title for the treemap
 p_treemap <- function(d, d2, title = NULL) {
-  dd <- d %>%
-    mutate(section_name = factor(!!sym("section_name"), levels = d2$section_name)) %>%
-    arrange(!!sym("section_name"))
+  d <- setDT(copy(d))
+  d2 <- setDT(copy(d2))
 
-  new_lvls <- dd %>%
-    group_by(!!sym("section_name"), !!sym("commodity_name")) %>%
-    summarise(
-      trade_value = sum(!!sym("trade_value"), na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    mutate_if(is.factor, as.character) %>%
-    arrange(desc(!!sym("trade_value"))) %>%
-    distinct(!!sym("section_name")) %>%
-    pull(!!sym("section_name"))
+  if (nrow(d) == 0L || nrow(d2) == 0L || !("broad_sector" %in% names(d))) return(NULL)
 
-  new_colors <- d2 %>%
-    mutate(section_name = factor(!!sym("section_name"), levels = new_lvls)) %>%
-    arrange(!!sym("section_name")) %>%
-    pull(!!sym("section_color"))
+  d$broad_sector <- factor(d$broad_sector, levels = d2$broad_sector)
+  setorder(d, broad_sector)
 
-  dd <- dd %>%
-    group_by(!!sym("section_name"), !!sym("commodity_name")) %>%
-    summarise(
-      trade_value = sum(!!sym("trade_value"), na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    left_join(d2 %>% rename(color = !!sym("section_color")), by = "section_name") %>%
-    ungroup()
+  # Compute new level order by total trade value per section
+  lvl_dt <- d[, .(trade_value = sum(trade_value, na.rm = TRUE)), by = .(broad_sector, commodity_name)]
+  lvl_dt$broad_sector <- as.character(lvl_dt$broad_sector)
+  setorder(lvl_dt, -trade_value)
+  new_lvls <- unique(lvl_dt$broad_sector)
+
+  # Build ordered colors vector
+  d2_ord <- copy(d2)
+  d2_ord$broad_sector <- factor(d2_ord$broad_sector, levels = new_lvls)
+  setorder(d2_ord, broad_sector)
+  new_colors <- d2_ord$sector_color
+
+  # Aggregate dd and join colors
+  dd <- d[, .(trade_value = sum(trade_value, na.rm = TRUE)), by = .(broad_sector, commodity_name)]
+  colors_join <- copy(d2)[, .(broad_sector, color = sector_color)]
+  dd <- merge(dd, colors_join, by = "broad_sector", all.x = TRUE)
 
   d3po(dd) %>%
     po_treemap(
       daes(
         size = .data$trade_value,
-        group = .data$section_name,
+        group = .data$broad_sector,
         subgroup = .data$commodity_name,
         color = .data$color,
         tiling = "binary"
@@ -298,9 +264,9 @@ p_treemap <- function(d, d2, title = NULL) {
       subtitle = JS(
         "function(_v, row) {
           if (row && row.mode === 'drilled') {
-            return 'Displaying Commodities';
+            return 'Displaying Industries';
           } else {
-            return 'Displaying Sections';
+            return 'Displaying Sectors';
           }
         }"
       ),
@@ -321,7 +287,7 @@ p_treemap <- function(d, d2, title = NULL) {
           }
 
           // prefer row.group/row.subgroup fields from the d3po/po_treemap internals
-          var section = (row && (row.group || row.section_name || row.name)) ? (row.group || row.section_name || row.name) : '';
+          var section = (row && (row.group || row.sector_name || row.name)) ? (row.group || row.sector_name || row.name) : '';
           var commodity = (row && (row.subgroup || row.commodity_name)) ? (row.subgroup || row.commodity_name) : '';
           var rawValue = row && (row.trade_value != null ? row.trade_value : (row.count != null ? row.count : (row.value != null ? row.value : '')));
           var value = formatBillion(rawValue);
@@ -363,7 +329,7 @@ p_treemap <- function(d, d2, title = NULL) {
         }
 
         // prefer row.group/row.subgroup fields from the d3po/po_treemap internals
-        var section = (row && (row.group || row.section_name || row.name)) ? (row.group || row.section_name || row.name) : '';
+        var section = (row && (row.group || row.sector_name || row.name)) ? (row.group || row.sector_name || row.name) : '';
         var commodity = (row && (row.subgroup || row.commodity_name)) ? (row.subgroup || row.commodity_name) : '';
         var raw = row && (row.trade_value != null ? row.trade_value : (row.count != null ? row.count : (row.value != null ? row.value : '')));
         var value = formatNumber(raw);
@@ -376,8 +342,8 @@ p_treemap <- function(d, d2, title = NULL) {
         // Level 2: show commodity only (not repeated section + commodity)
         return '<b>' + commodity + '</b><br/>Value: ' + value + '<br/>Percentage: ' + pct;
       }"
-    )) %>%
-    po_background("transparent")
+    ))
+
 }
 
 #' @title Add definite article for reporter names

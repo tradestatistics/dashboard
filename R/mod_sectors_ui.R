@@ -16,7 +16,7 @@ mod_products_ui <- function(id) {
                 "Years",
                 min = available_yrs_min(),
                 max = available_yrs_max(),
-                value = c(2018, 2023),
+                value = c(2018, 2022),
                 sep = "",
                 step = 1,
                 ticks = FALSE,
@@ -26,21 +26,22 @@ mod_products_ui <- function(id) {
             col_6(
               selectInput(
                 ns("s"),
-                "Section / Commodity",
-                choices = list(
-                  "HS Sections" = tradestatisticsshiny::sections_display
-                ),
-                selected = "01",
+                "Sectors",
+                choices = list("Sectors" = tradestatisticsshiny::sectors),
+                selected = "1",
                 selectize = TRUE,
                 width = "100%"
               )
             ),
             col_3(
               selectInput(
-                ns("d"),
-                "Convert dollars to a fixed year",
-                choices = c("No", available_yrs_deflator()),
-                selected = "",
+                ns("t"),
+                "Dataset",
+                choices = c(
+                  `International Trade and Production Database for Estimation (ITPD-E)` = "itpde",
+                  `International Trade and Production Database for Simulation (ITPD-S)` = "itpds"
+                ),
+                selected = "itpde",
                 selectize = TRUE,
                 width = "100%"
               )
@@ -88,7 +89,7 @@ mod_products_ui <- function(id) {
               col_4(
                 htmlOutput(ns("trd_stl_trade"), container = tags$h4),
                 htmlOutput(ns("trd_smr_trade"), container = tags$p),
-                p("The chart shows global trade trends for this product category. Trade values represent the sum of all countries' imports (using mirrored data).")
+                p("The chart shows global trade trends for this product category. Trade values represent the sum of all countries' imports.")
               ),
               col_8(
                 d3po_output(ns("trd_exc_columns_agg"), height = "500px")
