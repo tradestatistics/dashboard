@@ -89,7 +89,7 @@ mod_products_ui <- function(id) {
               col_4(
                 htmlOutput(ns("trd_stl_trade"), container = tags$h4),
                 htmlOutput(ns("trd_smr_trade"), container = tags$p),
-                p("The chart shows global trade trends for this product category. Trade values represent the sum of all countries' imports (using mirrored data).")
+                p("The chart shows global trade trends for this product category. Trade values represent the sum of all countries' imports.")
               ),
               col_8(
                 d3po_output(ns("trd_exc_columns_agg"), height = "500px")
