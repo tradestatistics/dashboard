@@ -1,18 +1,18 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# tradestatisticsshiny
+# tradestatisticsdashboard
 
 <!-- badges: start -->
 <!-- badges: end -->
 
-The goal of tradestatisticsshiny is to visualize international trade
+The goal of tradestatisticsdashboard is to visualize international trade
 flows for different countries. This is a part of
 [https://tradestatistics.io](tradestatistics.io).
 
 ## Installation
 
-You can install the development version of tradestatisticsshiny from
+You can install the development version of tradestatisticsdashboard from
 [GitHub](https://github.com/) with:
 
 ``` r

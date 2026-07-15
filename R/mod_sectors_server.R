@@ -29,7 +29,8 @@ mod_sectors_server <- function(id) {
     }) # table
     
     inp_fmt <- reactive({
-      input$fmt
+      fmt <- input$fmt
+      if (is.null(fmt) || !nzchar(fmt)) "csv" else fmt
     }) # format
 
     tbl_agg <- reactive(paste0(inp_t(), "_imp_exp"))
@@ -63,7 +64,7 @@ mod_sectors_server <- function(id) {
 
     # Human-readable reporter/partner names for glue templates ----
     sname <- eventReactive(input$go, {
-      out <- names(tradestatisticsshiny::sectors[tradestatisticsshiny::sectors == inp_s()])
+      out <- names(tradestatisticsdashboard::sectors[tradestatisticsdashboard::sectors == inp_s()])
       if (length(out) == 0 || is.na(out) || nchar(out) == 0) {
         return(inp_s())
       }
@@ -79,7 +80,7 @@ mod_sectors_server <- function(id) {
     ## Data ----
 
     df_agg <- reactive({
-      session$sendCustomMessage("showProgress", list(text = "Loading data..."))
+      showProgress(session, text = "Loading data...")
 
       yrs <- inp_y()
       scode <- inp_s()
@@ -180,6 +181,7 @@ mod_sectors_server <- function(id) {
 
     trd_exc_columns_agg <- reactive({
       d_all <- df_agg()
+      req(nrow(d_all) > 0)
 
       d <- data.table(
         year  = as.character(d_all$year),
@@ -557,7 +559,7 @@ mod_sectors_server <- function(id) {
 
       out <- od_treemap(d, d2, title = imp_tt_max_yr())
 
-      session$sendCustomMessage("hideProgress", list())
+      hideProgress(session)
 
       return(out)
     }) |>
@@ -578,7 +580,7 @@ mod_sectors_server <- function(id) {
 
     updateSelectizeInput(session, "s",
       choices = list(
-        "Sectors" = tradestatisticsshiny::sectors
+        "Sectors" = tradestatisticsdashboard::sectors
       ),
       selected = "1",
       server = TRUE
@@ -658,13 +660,20 @@ mod_sectors_server <- function(id) {
       "Select the correct format for your favourite language or software of choice. The dashboard can export to CSV/TSV/XLSX for Excel or any other software, but also to SAV (SPSS) and DTA (Stata)."
     })
 
-    dwn_fmt <- eventReactive(input$go, {
-      selectInput(
-        ns("fmt"),
-        "Download data as:",
-        choices = available_formats(),
-        selected = NULL,
-        selectize = TRUE
+    dwn_ctrl <- eventReactive(input$go, {
+      tagList(
+        selectInput(
+          ns("fmt"),
+          "Download data as:",
+          choices = available_formats(),
+          selected = NULL,
+          selectize = TRUE
+        ),
+        div(
+          class = "d-flex gap-2",
+          downloadButton(ns("dwn_agg_pre"), label = "Aggregated data"),
+          downloadButton(ns("dwn_dtl_pre"), label = "Detailed data")
+        )
       )
     })
 
@@ -692,18 +701,8 @@ mod_sectors_server <- function(id) {
     output$dwn_txt <- renderText({
       dwn_txt()
     })
-    output$dwn_fmt <- renderUI({
-      dwn_fmt()
-    })
-
-    output$dwn_dtl <- renderUI({
-      req(input$go)
-      downloadButton(ns("dwn_dtl_pre"), label = "Detailed data")
-    })
-
-    output$dwn_agg <- renderUI({
-      req(input$go)
-      downloadButton(ns("dwn_agg_pre"), label = "Aggregated data")
+    output$dwn_ctrl <- renderUI({
+      dwn_ctrl()
     })
 
     # Hide boxes until viz is ready ----

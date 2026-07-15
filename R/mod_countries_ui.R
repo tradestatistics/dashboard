@@ -7,68 +7,54 @@ mod_countries_ui <- function(id) {
     div(
       # Filter -----
       card(
-        col_12(
-          h2("Filter"),
-          fluidRow(
-            col_3(
-              sliderInput(
-                ns("y"),
-                "Years",
-                min = available_yrs_min(),
-                max = available_yrs_max(),
-                value = c(2018, 2022),
-                sep = "",
-                step = 1,
-                ticks = FALSE,
-                width = "100%"
-              )
-            ),
-            col_3(
-              selectInput(
-                ns("i"),
-                "Importer",
-                choices = tradestatisticsshiny::countries[tradestatisticsshiny::countries != "ALL"],
-                selected = "GBR",
-                selectize = TRUE,
-                width = "100%"
-              )
-            ),
-            col_3(
-              selectInput(
-                ns("e"),
-                "Exporter",
-                choices = c(
-                  "All countries" = "ALL", tradestatisticsshiny::countries[tradestatisticsshiny::countries != "ALL"]
-                ),
-                selected = "ALL",
-                selectize = TRUE,
-                width = "100%"
-              )
-            ),
-            col_3(
-              selectInput(
-                ns("t"),
-                "Dataset",
-                choices = c(
-                  `International Trade and Production Database for Estimation (ITPD-E)` = "itpde",
-                  `International Trade and Production Database for Simulation (ITPD-S)` = "itpds"
-                ),
-                selected = "itpde",
-                selectize = TRUE,
-                width = "100%"
-              )
-            )
+        h2("Filter"),
+        sliderInput(
+          ns("y"),
+          "Years",
+          min = available_yrs_min(),
+          max = available_yrs_max(),
+          value = c(2018, 2022),
+          sep = "",
+          step = 1,
+          ticks = FALSE,
+          width = "100%"
+        ),
+        selectInput(
+          ns("i"),
+          "Importer",
+          choices = tradestatisticsdashboard::countries[tradestatisticsdashboard::countries != "ALL"],
+          selected = "GBR",
+          selectize = TRUE,
+          width = "100%"
+        ),
+        selectInput(
+          ns("e"),
+          "Exporter",
+          choices = c(
+            "All countries" = "ALL", tradestatisticsdashboard::countries[tradestatisticsdashboard::countries != "ALL"]
           ),
-          fluidRow(
-            col_12(
-              align = "center",
-              br(),
-              actionButton(
-                ns("go"),
-                "Give me the country profile",
-                class = "btn btn-outline btn-dark"
-              )
-            )
+          selected = "ALL",
+          selectize = TRUE,
+          width = "100%"
+        ),
+        selectInput(
+          ns("t"),
+          "Dataset",
+          choices = c(
+            `International Trade and Production Database for Estimation (ITPD-E)` = "itpde",
+            `International Trade and Production Database for Simulation (ITPD-S)` = "itpds"
+          ),
+          selected = "itpde",
+          selectize = TRUE,
+          width = "100%"
+        ),
+        div(
+          style = "text-align:center;",
+          br(),
+          actionButton(
+            ns("go"),
+            "Give me the country profile",
+            class = "btn btn-outline btn-dark"
           )
         )
       ),
@@ -81,9 +67,7 @@ mod_countries_ui <- function(id) {
           br(),
           br(),
           card(
-            col_12(
-              htmlOutput(ns("title"), container = tags$h1)
-            )
+            htmlOutput(ns("title"), container = tags$h1)
           )
         )
       ),
@@ -97,22 +81,12 @@ mod_countries_ui <- function(id) {
           br(),
           card(
             htmlOutput(ns("trd_stl"), container = tags$h2),
-            fluidRow(
-              col_6(
-                htmlOutput(ns("trd_stl_exp"), container = tags$h4),
-                htmlOutput(ns("trd_smr_exp"), container = tags$p)
-              ),
-              col_6(
-                htmlOutput(ns("trd_stl_imp"), container = tags$h4),
-                htmlOutput(ns("trd_smr_imp"), container = tags$p)
-              )
-            ),
+            htmlOutput(ns("trd_stl_exp"), container = tags$h4),
+            htmlOutput(ns("trd_smr_exp"), container = tags$p),
+            htmlOutput(ns("trd_stl_imp"), container = tags$h4),
+            htmlOutput(ns("trd_smr_imp"), container = tags$p),
             p("The chart below shows the evolution of exports and imports over the selected period."),
-            fluidRow(
-              col_12(
-                d3po_output(ns("trd_exc_columns_agg"), height = "500px")
-              )
-            )
+            d3po_output(ns("trd_exc_columns_agg"), height = "500px")
           )
         )
       ),
@@ -127,17 +101,9 @@ mod_countries_ui <- function(id) {
           card(
             htmlOutput(ns("exp_tt_yr"), container = tags$h2),
             p("These charts show exports evolution over the selected years (line chart) and exports composition by sector and industry (treemaps) for the first and last year."),
-            fluidRow(
-              col_12(
-                d3po_output(ns("trd_line_exp"), height = "400px")
-              ),
-              col_6(
-                d3po_output(ns("exp_tm_dtl_min_yr"), height = "500px")
-              ),
-              col_6(
-                d3po_output(ns("exp_tm_dtl_max_yr"), height = "500px")
-              )
-            )
+            d3po_output(ns("trd_line_exp"), height = "400px"),
+            d3po_output(ns("exp_tm_dtl_min_yr"), height = "500px"),
+            d3po_output(ns("exp_tm_dtl_max_yr"), height = "500px")
           )
         )
       ),
@@ -152,17 +118,9 @@ mod_countries_ui <- function(id) {
           card(
             htmlOutput(ns("imp_tt_yr"), container = tags$h2),
             p("These charts show imports evolution over the selected years (line chart) and imports composition by sector and industry (treemaps) for the first and last year."),
-            fluidRow(
-              col_12(
-                d3po_output(ns("trd_line_imp"), height = "400px")
-              ),
-              col_6(
-                d3po_output(ns("imp_tm_dtl_min_yr"), height = "500px")
-              ),
-              col_6(
-                d3po_output(ns("imp_tm_dtl_max_yr"), height = "500px")
-              )
-            )
+            d3po_output(ns("trd_line_imp"), height = "400px"),
+            d3po_output(ns("imp_tm_dtl_min_yr"), height = "500px"),
+            d3po_output(ns("imp_tm_dtl_max_yr"), height = "500px")
           )
         )
       ),
@@ -177,11 +135,7 @@ mod_countries_ui <- function(id) {
             htmlOutput(ns("dwn_stl"), container = tags$h2),
             p("Download the data used to generate these visualizations. Aggregated data includes yearly totals; detailed data includes trade by industry."),
             htmlOutput(ns("dwn_txt"), container = tags$p),
-            uiOutput(ns("dwn_fmt")),
-            br(),
-            uiOutput(ns("dwn_agg")),
-            br(),
-            uiOutput(ns("dwn_dtl"))
+            uiOutput(ns("dwn_ctrl"))
           )
         )
       )

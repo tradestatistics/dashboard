@@ -6,19 +6,8 @@ app_server <- function(input, output, session) {
   mod_sectors_server("se")
   mod_cite_server("cite")
 
-  # Bookmarking ----
-
-  observe({
-    # Trigger this observer every time an input changes
-    # strip shiny related URL parameters
-    rvtl(input)
-    setBookmarkExclude(c(
-      "co-fmt", "se-fmt", "waiter_shown", "waiter-content_waiter_hidden", "co-go", "se-go"
-    ))
-    session$doBookmark()
-  })
-
-  onBookmarked(function(url) {
-    updateQueryString(url)
-  })
+  # URL sync — action buttons are always excluded automatically
+  syncUrl(session, exclude = c(
+    "co-fmt", "se-fmt", "co-go", "se-go"
+  ))
 }

@@ -33,7 +33,8 @@ mod_countries_server <- function(id) {
     }) # table
     
     inp_fmt <- reactive({
-      input$fmt
+      fmt <- input$fmt
+      if (is.null(fmt) || !nzchar(fmt)) "csv" else fmt
     }) # format
 
     # tbl_agg <- "itpde_imp_exp"
@@ -41,6 +42,32 @@ mod_countries_server <- function(id) {
 
     tbl_agg <- reactive(paste0(inp_t(), "_imp_exp"))
     tbl_dtl <- reactive(inp_t())
+
+    # Force every slow (DB-backed) reactive to compute here, eagerly and in a
+    # known order, bracketed by showProgress()/hideProgress(). This MUST be
+    # the first thing registered that depends on input$go: tabler's reactive
+    # engine invalidates/reruns input$go's dependents one at a time, in the
+    # order they were registered, and each one's *entire* downstream cascade
+    # (e.g. an output eagerly re-pulling a bindEvent(input$go) reactive) runs
+    # to completion before the next dependent gets its turn. If this observer
+    # were registered later (e.g. after the reactives/outputs below), some
+    # other output would already eagerly trigger a heavy DB-backed reactive
+    # before this observer ever ran - so showProgress() would only fire once
+    # that other (already slow) work is done, i.e. right at the end, with the
+    # UI looking frozen/stale for the preceding few seconds.
+    observeEvent(input$go, {
+      withProgress(session, "Loading data...", {
+        df_agg()
+        df_dtl()
+        trd_exc_columns_agg()
+        trd_line_exp()
+        trd_line_imp()
+        exp_tm_dtl_min_yr()
+        exp_tm_dtl_max_yr()
+        imp_tm_dtl_min_yr()
+        imp_tm_dtl_max_yr()
+      })
+    })
 
     # Update year slider based on available data in the selected table ----
     observeEvent(input$t, {
@@ -71,7 +98,7 @@ mod_countries_server <- function(id) {
     # Human-readable importer/exporter names for glue templates. Fallback to
     # the code when no display name is available.
     rname <- eventReactive(input$go, {
-      out <- names(tradestatisticsshiny::countries[tradestatisticsshiny::countries == inp_i()])
+      out <- names(tradestatisticsdashboard::countries[tradestatisticsdashboard::countries == inp_i()])
       if (length(out) == 0 || is.na(out) || nchar(out) == 0) {
         return(inp_i())
       }
@@ -79,7 +106,7 @@ mod_countries_server <- function(id) {
     })
 
     pname <- eventReactive(input$go, {
-      out <- names(tradestatisticsshiny::countries[tradestatisticsshiny::countries == inp_e()])
+      out <- names(tradestatisticsdashboard::countries[tradestatisticsdashboard::countries == inp_e()])
       if (length(out) == 0 || is.na(out) || nchar(out) == 0) {
         return(inp_e())
       }
@@ -99,8 +126,6 @@ mod_countries_server <- function(id) {
     ## Data ----
 
     df_agg <- reactive({
-      session$sendCustomMessage("showProgress", list(text = "Loading data..."))
-
       years <- inp_y()
       importer <- inp_i()
       exporter <- inp_e()
@@ -604,6 +629,7 @@ mod_countries_server <- function(id) {
 
     trd_exc_columns_agg <- reactive({
       d_all <- df_agg()
+      req(nrow(d_all) > 0)
 
       d <- rbindlist(list(
         data.table(year = d_all$year, trade = round(d_all$trade_exp / 1e9, 2), flow = "Exports"),
@@ -710,9 +736,12 @@ mod_countries_server <- function(id) {
     exp_tm_dtl_min_yr <- reactive({
       reporter <- inp_i()
       dtl <- df_dtl()
-      actual_min_yr <- min(dtl$year, na.rm = TRUE)
+      req(nrow(dtl) > 0)
+      dtl_exp <- dtl[exporter == reporter]
+      req(nrow(dtl_exp) > 0)
+      actual_min_yr <- min(dtl_exp$year, na.rm = TRUE)
       d <- se_aggregate_by_sector(
-        dtl[year == actual_min_yr & exporter == reporter],
+        dtl_exp[year == actual_min_yr],
         col = "trade", con = con
       )
       d2 <- se_colors(d, con = con)
@@ -728,9 +757,12 @@ mod_countries_server <- function(id) {
     exp_tm_dtl_max_yr <- reactive({
       reporter <- inp_i()
       dtl <- df_dtl()
-      actual_max_yr <- max(dtl$year, na.rm = TRUE)
+      req(nrow(dtl) > 0)
+      dtl_exp <- dtl[exporter == reporter]
+      req(nrow(dtl_exp) > 0)
+      actual_max_yr <- max(dtl_exp$year, na.rm = TRUE)
       d <- se_aggregate_by_sector(
-        dtl[year == actual_max_yr & exporter == reporter],
+        dtl_exp[year == actual_max_yr],
         col = "trade", con = con
       )
       d2 <- se_colors(d, con = con)
@@ -805,9 +837,12 @@ mod_countries_server <- function(id) {
     imp_tm_dtl_min_yr <- reactive({
       reporter <- inp_i()
       dtl <- df_dtl()
-      actual_min_yr <- min(dtl$year, na.rm = TRUE)
+      req(nrow(dtl) > 0)
+      dtl_imp <- dtl[importer == reporter]
+      req(nrow(dtl_imp) > 0)
+      actual_min_yr <- min(dtl_imp$year, na.rm = TRUE)
       d <- se_aggregate_by_sector(
-        dtl[year == actual_min_yr & importer == reporter],
+        dtl_imp[year == actual_min_yr],
         col = "trade", con = con
       )
       d2 <- se_colors(d, con = con)
@@ -823,15 +858,16 @@ mod_countries_server <- function(id) {
     imp_tm_dtl_max_yr <- reactive({
       reporter <- inp_i()
       dtl <- df_dtl()
-      actual_max_yr <- max(dtl$year, na.rm = TRUE)
+      req(nrow(dtl) > 0)
+      dtl_imp <- dtl[importer == reporter]
+      req(nrow(dtl_imp) > 0)
+      actual_max_yr <- max(dtl_imp$year, na.rm = TRUE)
       d <- se_aggregate_by_sector(
-        dtl[year == actual_max_yr & importer == reporter],
+        dtl_imp[year == actual_max_yr],
         col = "trade", con = con
       )
       d2 <- se_colors(d, con = con)
-      out <- se_treemap(d, d2, title = imp_tt_max_yr())
-      session$sendCustomMessage("hideProgress", list())
-      return(out)
+      se_treemap(d, d2, title = imp_tt_max_yr())
     }) |>
       bindCache(inp_y(), inp_i(), inp_e(), inp_t()) |>
       bindEvent(input$go)
@@ -840,7 +876,7 @@ mod_countries_server <- function(id) {
 
     observeEvent(input$i, {
       updateSelectizeInput(session, "e",
-        choices = c(`All countries` = "ALL", tradestatisticsshiny::countries[tradestatisticsshiny::countries != input$i]),
+        choices = c(`All countries` = "ALL", tradestatisticsdashboard::countries[tradestatisticsdashboard::countries != input$i]),
         selected = "ALL",
         server = TRUE
       )
@@ -856,13 +892,20 @@ mod_countries_server <- function(id) {
       "Select the correct format for your favourite language or software of choice. The dashboard can export to CSV/TSV/XLSX for Excel or any other software, but also to SAV (SPSS) and DTA (Stata)."
     })
 
-    dwn_fmt <- eventReactive(input$go, {
-      selectInput(
-        ns("fmt"),
-        "Format",
-        choices = available_formats(),
-        selected = NULL,
-        selectize = TRUE
+    dwn_ctrl <- eventReactive(input$go, {
+      tagList(
+        selectInput(
+          ns("fmt"),
+          "Format",
+          choices = available_formats(),
+          selected = NULL,
+          selectize = TRUE
+        ),
+        div(
+          class = "d-flex gap-2",
+          downloadButton(ns("dwn_agg_pre"), label = "Aggregated data"),
+          downloadButton(ns("dwn_dtl_pre"), label = "Detailed data")
+        )
       )
     })
 
@@ -878,7 +921,7 @@ mod_countries_server <- function(id) {
 
     ### Trade ----
 
-    output$trd_stl <- eventReactive(input$go, {
+    trd_stl <- eventReactive(input$go, {
       if (inp_e() == "ALL") {
         glue("Total multilateral Exports and Imports")
       } else {
@@ -886,12 +929,16 @@ mod_countries_server <- function(id) {
       }
     })
 
-    output$trd_stl_exp <- eventReactive(input$go, {
+    trd_stl_exp <- eventReactive(input$go, {
       "Exports"
     })
-    output$trd_stl_imp <- eventReactive(input$go, {
+    trd_stl_imp <- eventReactive(input$go, {
       "Imports"
     })
+
+    output$trd_stl <- renderText(trd_stl())
+    output$trd_stl_exp <- renderText(trd_stl_exp())
+    output$trd_stl_imp <- renderText(trd_stl_imp())
 
     output$trd_smr_exp <- renderText(trd_smr_txt_exp())
     output$trd_smr_imp <- renderText(trd_smr_txt_imp())
@@ -962,18 +1009,8 @@ mod_countries_server <- function(id) {
     output$dwn_txt <- renderText({
       dwn_txt()
     })
-    output$dwn_fmt <- renderUI({
-      dwn_fmt()
-    })
-
-    output$dwn_dtl <- renderUI({
-      req(input$go)
-      downloadButton(ns("dwn_dtl_pre"), label = "Detailed data")
-    })
-
-    output$dwn_agg <- renderUI({
-      req(input$go)
-      downloadButton(ns("dwn_agg_pre"), label = "Aggregated data")
+    output$dwn_ctrl <- renderUI({
+      dwn_ctrl()
     })
 
     # Hide boxes until viz is ready ----

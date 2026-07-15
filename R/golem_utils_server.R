@@ -404,7 +404,7 @@ growth_rate <- function(p, q, t) {
 #' @title Typing reactiveValues is too long
 #' @param ... elements to pass to the function
 #' @rdname reactives
-rv <- function(...) shiny::reactiveValues(...)
+rv <- function(...) tabler::reactiveValues(...)
 
 #' @rdname reactives
-rvtl <- function(...) shiny::reactiveValuesToList(...)
+rvtl <- function(...) tabler::reactiveValuesToList(...)

@@ -1,5 +1,5 @@
 golem::fill_desc(
-  pkg_name = "tradestatisticsshiny",
+  pkg_name = "tradestatisticsdashboard",
   pkg_title = "Open Trade Statistics Dashboard",
   pkg_description = "This is meant as a production grade Shiny app and not as end user app.",
   authors = person("Mauricio", "Vargas", , "mavargas11@uc.cl", role = c("aut", "cre", "cph"),

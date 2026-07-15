@@ -5,10 +5,8 @@ mod_welcome_ui <- function(id) {
   ns <- NS(id)
   tagList(
     div(
-      fluidRow(
-        col_12(
-          card(
-            h1("Open Trade Statistics"),
+      card(
+        h1("Open Trade Statistics"),
             br(),
             br(),
             p("Open Trade Statistics started as a visualization project back in 2017."),
@@ -25,15 +23,13 @@ mod_welcome_ui <- function(id) {
             br(),
             br(),
             p("If this resource is useful to you, please consider donating. The dashboard and the SQL database/API behind it will remain open and free of charge but there is a hosting cost."),
-            p(
-              a(
-                href = "https://www.buymeacoffee.com/pacha", target = "_blank",
-                img(
-                  src = "https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-black.svg",
-                  alt = "Buy me a coffee",
-                  style = "height:34px;"
-                )
-              )
+        p(
+          a(
+            href = "https://www.buymeacoffee.com/pacha", target = "_blank",
+            img(
+              src = "https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-black.svg",
+              alt = "Buy me a coffee",
+              style = "height:34px;"
             )
           )
         )

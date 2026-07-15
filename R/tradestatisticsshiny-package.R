@@ -1,9 +1,7 @@
 #' @keywords internal
-#' @import shiny
 #' @import tabler
 #' @import d3po
 #' @importFrom cachem cache_disk
-#' @importFrom shiny shinyOptions
 #' @importFrom data.table `:=` .N .I .SD copy data.table fifelse frankv rbindlist setDT setnames setorder
 #' @importFrom glue glue
 #' @importFrom golem add_resource_path activate_js favicon bundle_resources with_golem_options
@@ -12,8 +10,6 @@
 #' @importFrom pool dbPool dbIsValid poolClose
 #' @importFrom rio export
 #' @importFrom RPostgres Postgres
-#' @importFrom shiny NS tagList HTML fluidRow selectInput sliderInput actionButton htmlOutput uiOutput h2 tags div moduleServer reactive eventReactive observe observeEvent renderText renderUI updateSelectizeInput downloadHandler req shinyApp
-#' @importFrom shinyjs hide hidden show useShinyjs
 #' @importFrom stats setNames
 "_PACKAGE"
 
@@ -31,10 +27,9 @@ utils::globalVariables(c(
   "year"
 ))
 
-shinyOptions(
+tablerOptions(
   cache = cache_disk(
     dir = "/tradestatistics/cache"
-    # logfile = "/tradestatistics/log/cache.log"
   )
 )
 

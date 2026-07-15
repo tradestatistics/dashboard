@@ -1,6 +1,6 @@
 devtools::load_all()
 
-con = tradestatisticsshiny::sql_con()
+con = tradestatisticsdashboard::sql_con()
 
 tbl_dtl = function() "yrc"
 inp_r = function() "can"

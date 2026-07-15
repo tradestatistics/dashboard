@@ -1,6 +1,5 @@
 #' @title The application User-Interface
-#' @param request Internal parameter for `Shiny`. DO NOT REMOVE.
-app_ui <- function(request) {
+app_ui <- function() {
   tagList(
     # External resources
     golem_add_external_resources(),
@@ -19,8 +18,7 @@ app_ui <- function(request) {
         menu_item("Cite", tab_name = "cite", icon = "book-filled")
       ),
       body = body(
-        useShinyjs(),
-        br(),
+        tags$br(),
         tab_items(
           tab_item(
             tab_name = "welcome",
@@ -47,25 +45,16 @@ app_ui <- function(request) {
 
 #' @title Add external Resources to the Application
 #' @description This function is internally used to add external
-#'  resources inside the Shiny application.
+#'  resources inside the application.
 golem_add_external_resources <- function() {
-  add_resource_path(
+  addResourcePath(
     "www",
     app_sys("app/www")
   )
 
   tags$head(
-    favicon(),
-    bundle_resources(
-      path = app_sys("app/www"),
-      app_title = "Open Trade Statistics"
-    ),
-
-    # Include custom JS that equalizes card heights where needed and waiter helper
-    tags$script(src = "www/tabler-waiter.js"),
-    tags$script(src = "www/progress-bar.js"),
-    tags$link(rel = "stylesheet", type = "text/css", href = "www/tabler.css"),
-    # tags$link(rel = "stylesheet", type = "text/css", href = "www/waiter.css"),
-    tags$link(rel = "stylesheet", type = "text/css", href = "www/progress-bar.css")
+    tags$title("Open Trade Statistics"),
+    tags$link(rel = "icon", href = "www/favicon.ico"),
+    tags$link(rel = "stylesheet", type = "text/css", href = "www/tabler.css")
   )
 }

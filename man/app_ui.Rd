@@ -4,10 +4,7 @@
 \alias{app_ui}
 \title{The application User-Interface}
 \usage{
-app_ui(request)
-}
-\arguments{
-\item{request}{Internal parameter for `Shiny`. DO NOT REMOVE.}
+app_ui()
 }
 \description{
 The application User-Interface
