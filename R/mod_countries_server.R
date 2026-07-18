@@ -1,18 +1,10 @@
 #' @title Country profile server-side function
 #' @description A shiny Module.
-#' @param id Internal parameter for Shiny.
-mod_countries_server <- function(id) {
+#' @param id Internal parameter for Tabler.
+#' @param con Shared SQL connection pool, created and closed by `app_server()`.
+mod_countries_server <- function(id, con) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-
-    # Connect to SQL ----
-    con <- sql_con()
-
-    session$onSessionEnded(function() {
-      if (!is.null(con) && dbIsValid(con)) {
-        poolClose(con)
-      }
-    })
 
     # User inputs ----
     inp_y <- reactive({

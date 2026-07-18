@@ -6,13 +6,13 @@
 \alias{tradestatisticsdashboard-package}
 \title{tradestatisticsdashboard: Open Trade Statistics Dashboard}
 \description{
-This is meant as a production grade Shiny app and not as end user app.
+Iteractive dashboard to explore Open Trade Statistics data, which consists in a curated version of the International Trade and Production Database for Estimation (ITPD-E) and the International Trade and Production Database for Simulation (ITPD-S).
 }
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://github.com/tradestatistics/visualization-with-shiny}
-  \item Report bugs at \url{https://github.com/tradestatistics/visualization-with-shiny/issues}
+  \item \url{https://github.com/pachadotdev/tradestatistics-dashboard}
+  \item Report bugs at \url{https://github.com/pachadotdev/tradestatistics-dashboardissues}
 }
 
 }

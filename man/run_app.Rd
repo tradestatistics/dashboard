@@ -4,10 +4,7 @@
 \alias{run_app}
 \title{Run the Application}
 \usage{
-run_app(...)
-}
-\arguments{
-\item{...}{Currently unused (kept for backwards-compatible signature).}
+run_app()
 }
 \description{
 Run the Application

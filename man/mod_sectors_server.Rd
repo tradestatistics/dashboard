@@ -4,10 +4,12 @@
 \alias{mod_sectors_server}
 \title{Sector profile server-side function}
 \usage{
-mod_sectors_server(id)
+mod_sectors_server(id, con)
 }
 \arguments{
-\item{id}{Internal parameter for Shiny.}
+\item{id}{Internal parameter for Tabler.}
+
+\item{con}{Shared SQL connection pool, created and closed by `app_server()`.}
 }
 \description{
 A shiny Module.

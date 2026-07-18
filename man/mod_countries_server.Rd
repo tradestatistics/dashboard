@@ -4,10 +4,12 @@
 \alias{mod_countries_server}
 \title{Country profile server-side function}
 \usage{
-mod_countries_server(id)
+mod_countries_server(id, con)
 }
 \arguments{
-\item{id}{Internal parameter for Shiny.}
+\item{id}{Internal parameter for Tabler.}
+
+\item{con}{Shared SQL connection pool, created and closed by `app_server()`.}
 }
 \description{
 A shiny Module.

@@ -4,12 +4,13 @@ Version: 0.1
 Authors@R: 
     person("Mauricio", "Vargas", , "mavargas11@uc.cl", role = c("aut", "cre", "cph"),
            comment = c(ORCID = "0000-0003-1017-7574"))
-Description: This is meant as a production grade Shiny app and not as end
-    user app.
+Description: Iteractive dashboard to explore Open Trade Statistics data, which consists in a
+    curated version of the International Trade and Production Database for Estimation (ITPD-E) and
+    the International Trade and Production Database for Simulation (ITPD-S).
 License: Apache License (>= 2)
-URL: https://github.com/tradestatistics/visualization-with-shiny
+URL: https://github.com/pachadotdev/tradestatistics-dashboard
 BugReports: 
-    https://github.com/tradestatistics/visualization-with-shiny/issues
+    https://github.com/pachadotdev/tradestatistics-dashboardissues
 Depends: 
     R (>= 3.5)
 Imports: 
@@ -18,14 +19,11 @@ Imports:
     d3po (>= 1.0.0),
     data.table,
     glue (>= 1.6.2),
-    golem (>= 0.3.2),
     htmlwidgets,
     jsonlite,
     pool,
     rio (>= 0.5.29),
     RPostgres,
-    shiny (>= 1.7.1),
-    shinyjs (>= 2.1.0),
     stats,
     tabler
 Suggests: 
