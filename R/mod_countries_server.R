@@ -1,5 +1,5 @@
 #' @title Country profile server-side function
-#' @description A shiny Module.
+#' @description A tabler Module.
 #' @param id Internal parameter for Tabler.
 #' @param con Shared SQL connection, created and closed by `app_server()`.
 mod_countries_server <- function(id, con) {
@@ -935,7 +935,7 @@ mod_countries_server <- function(id, con) {
     output$trd_smr_exp <- renderText(trd_smr_txt_exp())
     output$trd_smr_imp <- renderText(trd_smr_txt_imp())
 
-    output$trd_exc_columns_agg <- render_d3po({
+    output$trd_exc_columns_agg <- renderWidget({
       trd_exc_columns_agg()
     })
 
@@ -944,16 +944,16 @@ mod_countries_server <- function(id, con) {
     output$exp_tt_yr <- renderText(exp_tt_yr())
 
     # Export line chart outputs
-    output$trd_line_exp <- render_d3po({
+    output$trd_line_exp <- renderWidget({
       trd_line_exp()
     })
 
     output$exp_tt_min_yr <- renderText(exp_tt_min_yr())
-    output$exp_tm_dtl_min_yr <- render_d3po({
+    output$exp_tm_dtl_min_yr <- renderWidget({
       exp_tm_dtl_min_yr()
     })
     output$exp_tt_max_yr <- renderText(exp_tt_max_yr())
-    output$exp_tm_dtl_max_yr <- render_d3po({
+    output$exp_tm_dtl_max_yr <- renderWidget({
       exp_tm_dtl_max_yr()
     })
 
@@ -962,16 +962,16 @@ mod_countries_server <- function(id, con) {
     output$imp_tt_yr <- renderText(imp_tt_yr())
 
     # Import line chart outputs
-    output$trd_line_imp <- render_d3po({
+    output$trd_line_imp <- renderWidget({
       trd_line_imp()
     })
 
     output$imp_tt_min_yr <- renderText(imp_tt_min_yr())
-    output$imp_tm_dtl_min_yr <- render_d3po({
+    output$imp_tm_dtl_min_yr <- renderWidget({
       imp_tm_dtl_min_yr()
     })
     output$imp_tt_max_yr <- renderText(imp_tt_max_yr())
-    output$imp_tm_dtl_max_yr <- render_d3po({
+    output$imp_tm_dtl_max_yr <- renderWidget({
       imp_tm_dtl_max_yr()
     })
 

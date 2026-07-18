@@ -7,8 +7,8 @@
 mod_countries_ui(id)
 }
 \arguments{
-\item{id}{Internal parameter for Shiny.}
+\item{id}{Internal parameter for Tabler.}
 }
 \description{
-A shiny Module.
+A tabler Module.
 }

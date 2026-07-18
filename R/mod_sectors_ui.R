@@ -1,6 +1,6 @@
 #' @title Sector profile UI Function
-#' @description A shiny Module.
-#' @param id Internal parameter for Shiny.
+#' @description A tabler Module.
+#' @param id Internal parameter for Tabler.
 mod_sectors_ui <- function(id) {
   ns <- NS(id)
   tagList(

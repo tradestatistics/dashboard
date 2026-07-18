@@ -1,5 +1,5 @@
 #' @title Sector profile server-side function
-#' @description A shiny Module.
+#' @description A tabler Module.
 #' @param id Internal parameter for Tabler.
 #' @param con Shared SQL connection, created and closed by `app_server()`.
 mod_sectors_server <- function(id, con) {
@@ -592,7 +592,7 @@ mod_sectors_server <- function(id, con) {
 
     output$trd_smr_trade <- renderText(trd_smr_txt())
 
-    output$trd_exc_columns_agg <- render_d3po({
+    output$trd_exc_columns_agg <- renderWidget({
       trd_exc_columns_agg()
     })
 
@@ -601,21 +601,21 @@ mod_sectors_server <- function(id, con) {
     output$exp_tt_yr <- renderText(exp_tt_yr())
 
     output$exp_col_min_yr_usd_tt <- renderText(exp_col_min_yr_usd_tt())
-    output$exp_col_min_yr_usd <- render_d3po({
+    output$exp_col_min_yr_usd <- renderWidget({
       exp_col_min_yr_usd()
     })
 
     output$exp_col_max_yr_usd_tt <- renderText(exp_col_max_yr_usd_tt())
-    output$exp_col_max_yr_usd <- render_d3po({
+    output$exp_col_max_yr_usd <- renderWidget({
       exp_col_max_yr_usd()
     })
 
     output$exp_tt_min_yr <- renderText(exp_tt_min_yr())
-    output$exp_tm_dtl_min_yr <- render_d3po({
+    output$exp_tm_dtl_min_yr <- renderWidget({
       exp_tm_dtl_min_yr()
     })
     output$exp_tt_max_yr <- renderText(exp_tt_max_yr())
-    output$exp_tm_dtl_max_yr <- render_d3po({
+    output$exp_tm_dtl_max_yr <- renderWidget({
       exp_tm_dtl_max_yr()
     })
 
@@ -624,21 +624,21 @@ mod_sectors_server <- function(id, con) {
     output$imp_tt_yr <- renderText(imp_tt_yr())
 
     output$imp_col_min_yr_usd_tt <- renderText(imp_col_min_yr_usd_tt())
-    output$imp_col_min_yr_usd <- render_d3po({
+    output$imp_col_min_yr_usd <- renderWidget({
       imp_col_min_yr_usd()
     })
 
     output$imp_col_max_yr_usd_tt <- renderText(imp_col_max_yr_usd_tt())
-    output$imp_col_max_yr_usd <- render_d3po({
+    output$imp_col_max_yr_usd <- renderWidget({
       imp_col_max_yr_usd()
     })
 
     output$imp_tt_min_yr <- renderText(imp_tt_min_yr())
-    output$imp_tm_dtl_min_yr <- render_d3po({
+    output$imp_tm_dtl_min_yr <- renderWidget({
       imp_tm_dtl_min_yr()
     })
     output$imp_tt_max_yr <- renderText(imp_tt_max_yr())
-    output$imp_tm_dtl_max_yr <- render_d3po({
+    output$imp_tm_dtl_max_yr <- renderWidget({
       imp_tm_dtl_max_yr()
     })
 

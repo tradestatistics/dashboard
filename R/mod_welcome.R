@@ -1,6 +1,6 @@
 #' @title Welcome UI Function
-#' @description A shiny Module.
-#' @param id Internal parameters for Shiny.
+#' @description A tabler Module.
+#' @param id Internal parameters for Tabler.
 mod_welcome_ui <- function(id) {
   ns <- NS(id)
   tagList(
@@ -10,7 +10,7 @@ mod_welcome_ui <- function(id) {
             br(),
             br(),
             p("Open Trade Statistics started as a visualization project back in 2017."),
-            p(HTML('The information displayed here is based on <a href="https://comtradeplus.un.org/">UN Comtrade Plus</a> datasets. These figures do not include services or foreign direct investment.')),
+            p(HTML('The data used here is provided by the USITC.')),
             p("Explore the country and sector profiles using the navigation menu."),
             br(),
             p("Check the R package to download the data displayed here:"),

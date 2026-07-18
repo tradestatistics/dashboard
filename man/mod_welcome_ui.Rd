@@ -7,8 +7,8 @@
 mod_welcome_ui(id)
 }
 \arguments{
-\item{id}{Internal parameters for Shiny.}
+\item{id}{Internal parameters for Tabler.}
 }
 \description{
-A shiny Module.
+A tabler Module.
 }

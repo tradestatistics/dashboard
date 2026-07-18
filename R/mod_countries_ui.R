@@ -1,6 +1,6 @@
 #' @title Country profile UI-side function
-#' @description A shiny Module.
-#' @param id Internal parameter for Shiny.
+#' @description A tabler Module.
+#' @param id Internal parameter for Tabler.
 mod_countries_ui <- function(id) {
   ns <- NS(id)
   tagList(

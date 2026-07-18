@@ -12,5 +12,5 @@ mod_countries_server(id, con)
 \item{con}{Shared SQL connection, created and closed by `app_server()`.}
 }
 \description{
-A shiny Module.
+A tabler Module.
 }

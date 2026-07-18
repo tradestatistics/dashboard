@@ -54,7 +54,7 @@ golem_add_external_resources <- function() {
 
   tags$head(
     tags$title("Open Trade Statistics"),
-    tags$link(rel = "icon", href = "www/favicon.ico"),
-    tags$link(rel = "stylesheet", type = "text/css", href = "www/tabler.css")
+    tags$link(rel = "icon", href = "www/favicon.ico")
+    # tags$link(rel = "stylesheet", type = "text/css", href = "www/tabler.css")
   )
 }
