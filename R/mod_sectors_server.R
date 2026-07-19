@@ -19,7 +19,7 @@ mod_sectors_server <- function(id, con) {
     inp_t <- reactive({
       input$t
     }) # table
-    
+
     inp_fmt <- reactive({
       fmt <- input$fmt
       if (is.null(fmt) || !nzchar(fmt)) "csv" else fmt
@@ -29,30 +29,33 @@ mod_sectors_server <- function(id, con) {
     tbl_dtl <- reactive(inp_t())
 
     # Update year slider based on available data in the selected table ----
-    observeEvent(input$t, {
-      tbl <- inp_t()
-      yr_range <- tryCatch(
-        dbGetQuery(con, sprintf(
-          "SELECT MIN(year) AS min_yr, MAX(year) AS max_yr FROM %s",
-          tbl
-        )),
-        error = function(e) NULL
-      )
-      if (!is.null(yr_range) && nrow(yr_range) == 1 && !is.na(yr_range$min_yr)) {
-        min_yr <- as.integer(yr_range$min_yr)
-        max_yr <- as.integer(yr_range$max_yr)
-        cur_min <- min(input$y[1], input$y[2])
-        cur_max <- max(input$y[1], input$y[2])
-        updateSliderInput(session, "y",
-          min   = min_yr,
-          max   = max_yr,
-          value = c(
-            max(min_yr, min(cur_min, max_yr)),
-            min(max_yr, max(cur_max, min_yr))
-          )
+    observeEvent(input$t,
+      {
+        tbl <- inp_t()
+        yr_range <- tryCatch(
+          dbGetQuery(con, sprintf(
+            "SELECT MIN(year) AS min_yr, MAX(year) AS max_yr FROM %s",
+            tbl
+          )),
+          error = function(e) NULL
         )
-      }
-    }, ignoreInit = TRUE)
+        if (!is.null(yr_range) && nrow(yr_range) == 1 && !is.na(yr_range$min_yr)) {
+          min_yr <- as.integer(yr_range$min_yr)
+          max_yr <- as.integer(yr_range$max_yr)
+          cur_min <- min(input$y[1], input$y[2])
+          cur_max <- max(input$y[1], input$y[2])
+          updateSliderInput(session, "y",
+            min = min_yr,
+            max = max_yr,
+            value = c(
+              max(min_yr, min(cur_min, max_yr)),
+              min(max_yr, max(cur_max, min_yr))
+            )
+          )
+        }
+      },
+      ignoreInit = TRUE
+    )
 
     # Human-readable reporter/partner names for glue templates ----
     sname <- eventReactive(input$go, {
@@ -209,7 +212,6 @@ mod_sectors_server <- function(id, con) {
             return groupPrefix + (val || 0) + ' B' ;
           }"
         ))
-
     }) |>
       bindCache(inp_y(), inp_s(), inp_t()) |>
       bindEvent(input$go)
@@ -235,7 +237,8 @@ mod_sectors_server <- function(id, con) {
     exp_col_min_yr_usd <- reactive({
       min_year <- min(inp_y())
 
-      countries_data <- setDT(dbGetQuery(con,
+      countries_data <- setDT(dbGetQuery(
+        con,
         "SELECT dynamic_code, country FROM dgd_countries"
       ))
 
@@ -275,7 +278,6 @@ mod_sectors_server <- function(id, con) {
         ) |>
         po_format(x = format(.data$trade, big.mark = " ", scientific = FALSE, digits = 2)) |>
         po_tooltip("{country}: {trade} billion")
-
     }) |>
       bindCache(inp_y(), inp_s(), inp_t()) |>
       bindEvent(input$go)
@@ -283,7 +285,8 @@ mod_sectors_server <- function(id, con) {
     exp_col_max_yr_usd <- reactive({
       max_year <- max(inp_y())
 
-      countries_data <- setDT(dbGetQuery(con,
+      countries_data <- setDT(dbGetQuery(
+        con,
         "SELECT dynamic_code, country FROM dgd_countries"
       ))
 
@@ -323,7 +326,6 @@ mod_sectors_server <- function(id, con) {
         ) |>
         po_format(x = format(.data$trade, big.mark = " ", scientific = FALSE, digits = 2)) |>
         po_tooltip("{country}: {trade} billion")
-
     }) |>
       bindCache(inp_y(), inp_s(), inp_t()) |>
       bindEvent(input$go)
@@ -335,7 +337,8 @@ mod_sectors_server <- function(id, con) {
     exp_tm_dtl_min_yr <- reactive({
       min_year <- min(inp_y())
 
-      countries_data <- setDT(dbGetQuery(con,
+      countries_data <- setDT(dbGetQuery(
+        con,
         "SELECT dc.dynamic_code, dc.country, col.region_colour, reg.region
          FROM dgd_countries dc
          JOIN dgd_colours col ON col.iso3_dynamic = dc.dynamic_code
@@ -363,7 +366,8 @@ mod_sectors_server <- function(id, con) {
     exp_tm_dtl_max_yr <- reactive({
       max_year <- max(inp_y())
 
-      countries_data <- setDT(dbGetQuery(con,
+      countries_data <- setDT(dbGetQuery(
+        con,
         "SELECT dc.dynamic_code, dc.country, col.region_colour, reg.region
          FROM dgd_countries dc
          JOIN dgd_colours col ON col.iso3_dynamic = dc.dynamic_code
@@ -405,7 +409,8 @@ mod_sectors_server <- function(id, con) {
     imp_col_min_yr_usd <- reactive({
       min_year <- min(inp_y())
 
-      countries_data <- setDT(dbGetQuery(con,
+      countries_data <- setDT(dbGetQuery(
+        con,
         "SELECT dynamic_code, country FROM dgd_countries"
       ))
 
@@ -445,7 +450,6 @@ mod_sectors_server <- function(id, con) {
         ) |>
         po_format(x = format(.data$trade, big.mark = " ", scientific = FALSE, digits = 2)) |>
         po_tooltip("{country}: {trade} billion")
-
     }) |>
       bindCache(inp_y(), inp_s(), inp_t()) |>
       bindEvent(input$go)
@@ -453,7 +457,8 @@ mod_sectors_server <- function(id, con) {
     imp_col_max_yr_usd <- reactive({
       max_year <- max(inp_y())
 
-      countries_data <- setDT(dbGetQuery(con,
+      countries_data <- setDT(dbGetQuery(
+        con,
         "SELECT dynamic_code, country FROM dgd_countries"
       ))
 
@@ -493,7 +498,6 @@ mod_sectors_server <- function(id, con) {
         ) |>
         po_format(x = format(.data$trade, big.mark = " ", scientific = FALSE, digits = 2)) |>
         po_tooltip("{country}: {trade} billion")
-
     }) |>
       bindCache(inp_y(), inp_s(), inp_t()) |>
       bindEvent(input$go)
@@ -505,7 +509,8 @@ mod_sectors_server <- function(id, con) {
     imp_tm_dtl_min_yr <- reactive({
       min_year <- min(inp_y())
 
-      countries_data <- setDT(dbGetQuery(con,
+      countries_data <- setDT(dbGetQuery(
+        con,
         "SELECT dc.dynamic_code, dc.country, col.region_colour, reg.region
          FROM dgd_countries dc
          JOIN dgd_colours col ON col.iso3_dynamic = dc.dynamic_code
@@ -533,7 +538,8 @@ mod_sectors_server <- function(id, con) {
     imp_tm_dtl_max_yr <- reactive({
       max_year <- max(inp_y())
 
-      countries_data <- setDT(dbGetQuery(con,
+      countries_data <- setDT(dbGetQuery(
+        con,
         "SELECT dc.dynamic_code, dc.country, col.region_colour, reg.region
          FROM dgd_countries dc
          JOIN dgd_colours col ON col.iso3_dynamic = dc.dynamic_code

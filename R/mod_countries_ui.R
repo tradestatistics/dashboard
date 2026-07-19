@@ -9,23 +9,19 @@ mod_countries_ui <- function(id) {
       col12(card(
         h2("Filter")
       )),
-
       br(),
-
       col12(card(sliderInput(
-            ns("y"),
-            "Years",
-            min = available_yrs_min(),
-            max = available_yrs_max(),
-            value = c(2018, 2022),
-            sep = "",
-            step = 1,
-            ticks = FALSE,
-            width = "100%"
+        ns("y"),
+        "Years",
+        min = available_yrs_min(),
+        max = available_yrs_max(),
+        value = c(2018, 2022),
+        sep = "",
+        step = 1,
+        ticks = FALSE,
+        width = "100%"
       ))),
-
       br(),
-
       row(
         col6(card(selectInput(
           ns("i"),
@@ -35,7 +31,6 @@ mod_countries_ui <- function(id) {
           selectize = TRUE,
           width = "100%"
         ))),
-
         col6(card(selectInput(
           ns("e"),
           "Exporter",
@@ -47,9 +42,7 @@ mod_countries_ui <- function(id) {
           width = "100%"
         )))
       ),
-      
       br(),
-
       col12(
         card(
           selectInput(
@@ -63,7 +56,6 @@ mod_countries_ui <- function(id) {
             selectize = TRUE,
             width = "100%"
           ),
-
           div(
             style = "text-align:center;",
             br(),
@@ -82,7 +74,6 @@ mod_countries_ui <- function(id) {
         div(
           id = ns("title_section"),
           br(),
-          br(),
           card(htmlOutput(ns("title"), container = tags$h1))
         )
       ),
@@ -93,20 +84,17 @@ mod_countries_ui <- function(id) {
         div(
           id = ns("aggregated_trade"),
           br(),
+          col12(
+            card(
+              htmlOutput(ns("trd_stl"), container = tags$h2),
+              htmlOutput(ns("trd_stl_exp"), container = tags$h4),
+              htmlOutput(ns("trd_smr_exp"), container = tags$p),
+              htmlOutput(ns("trd_stl_imp"), container = tags$h4),
+              htmlOutput(ns("trd_smr_imp"), container = tags$p)
+            )
+          ),
           br(),
-          row(
-            col4(
-              card(htmlOutput(ns("trd_stl"), container = tags$h2)),
-              br(),
-              card(
-                htmlOutput(ns("trd_stl_exp"), container = tags$h4),
-                htmlOutput(ns("trd_smr_exp"), container = tags$p),
-                htmlOutput(ns("trd_stl_imp"), container = tags$h4),
-                htmlOutput(ns("trd_smr_imp"), container = tags$p)
-              )
-            ),
-            col8(card(d3po_output(ns("trd_exc_columns_agg"), height = "400px")))
-          )
+          col12(card(d3po_output(ns("trd_exc_columns_agg"), height = "500px")))
         )
       ),
 
@@ -116,14 +104,12 @@ mod_countries_ui <- function(id) {
         div(
           id = ns("detailed_trade_exp"),
           br(),
-          row(
-            col4(
-              card(htmlOutput(ns("exp_tt_yr"), container = tags$h2)),
-              br(),
-              card(p("These charts show exports evolution over the selected years (line chart) and exports composition by sector and industry (treemaps) for the first and last year."))
-            ),
-            col8(card(d3po_output(ns("trd_line_exp"), height = "400px")))
-          ),
+          col12(card(
+            htmlOutput(ns("exp_tt_yr"), container = tags$h2),
+            p("These charts show exports evolution over the selected years (line chart) and exports composition by sector and industry (treemaps) for the first and last year.")
+          )),
+          br(),
+          col12(card(d3po_output(ns("trd_line_exp"), height = "500px"))),
           br(),
           row(
             col6(card(d3po_output(ns("exp_tm_dtl_min_yr"), height = "500px"))),
@@ -138,14 +124,14 @@ mod_countries_ui <- function(id) {
         div(
           id = ns("detailed_trade_imp"),
           br(),
-          row(
-            col4(
-              card(htmlOutput(ns("imp_tt_yr"), container = tags$h2)),
-              br(),
-              card(p("These charts show imports evolution over the selected years (line chart) and imports composition by sector and industry (treemaps) for the first and last year."))
-            ),
-            col8(card(d3po_output(ns("trd_line_imp"), height = "400px")))
+          col12(
+            card(
+              htmlOutput(ns("imp_tt_yr"), container = tags$h2),
+              p("These charts show imports evolution over the selected years (line chart) and imports composition by sector and industry (treemaps) for the first and last year.")
+            )
           ),
+          br(),
+          col12(card(d3po_output(ns("trd_line_imp"), height = "500px"))),
           br(),
           row(
             col6(card(d3po_output(ns("imp_tm_dtl_min_yr"), height = "500px"))),

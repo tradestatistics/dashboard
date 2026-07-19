@@ -51,7 +51,9 @@ od_treemap <- function(d, d2, title = NULL) {
   d <- setDT(copy(d))
   d2 <- setDT(copy(d2))
 
-  if (nrow(d) == 0L || nrow(d2) == 0L || !("continent_name" %in% names(d))) return(NULL)
+  if (nrow(d) == 0L || nrow(d2) == 0L || !("continent_name" %in% names(d))) {
+    return(NULL)
+  }
 
   d$continent_name <- factor(d$continent_name, levels = d2$continent_name)
   setorder(d, continent_name)
@@ -154,7 +156,6 @@ od_treemap <- function(d, d2, title = NULL) {
         return '<b>' + subgroup + '</b><br/>Value: ' + value + '<br/>Percentage: ' + pct;
       }"
     ))
-
 }
 
 # SECTOR TREEMAPS ----
@@ -177,7 +178,9 @@ se_aggregate_by_sector <- function(d, col, con) {
   d[, sum_trade_value := NULL]
 
   sections <- unique(d[["broad_sector"]])
-  if (length(sections) == 0L) return(d)
+  if (length(sections) == 0L) {
+    return(d)
+  }
   d <- rbindlist(lapply(sections, function(s) {
     setorder(d[broad_sector == s], -trade_value)
   }))
@@ -190,9 +193,12 @@ se_aggregate_by_sector <- function(d, col, con) {
 #' @param con SQL connection
 se_colors <- function(d, con) {
   d <- setDT(copy(d))
-  if (!("broad_sector" %in% names(d)) || nrow(d) == 0L) return(data.table())
+  if (!("broad_sector" %in% names(d)) || nrow(d) == 0L) {
+    return(data.table())
+  }
   sectors <- unique(d[["broad_sector"]])
-  colors_ref <- setDT(dbGetQuery(con,
+  colors_ref <- setDT(dbGetQuery(
+    con,
     "SELECT s.broad_sector AS broad_sector, c.colour AS sector_color
      FROM itpd_sectors s JOIN itpd_colours c ON s.broad_sector_id = c.broad_sector_id"
   ))
@@ -203,13 +209,16 @@ se_colors <- function(d, con) {
 #' @param d input dataset
 #' @param con SQL connection
 se_aggregate_sectors <- function(d, con) {
-  industries_ref <- setDT(dbGetQuery(con,
+  industries_ref <- setDT(dbGetQuery(
+    con,
     "SELECT industry_id, industry_descr AS commodity_name FROM itpd_industries"
   ))
-  sectors_ref <- setDT(dbGetQuery(con,
+  sectors_ref <- setDT(dbGetQuery(
+    con,
     "SELECT broad_sector_id, broad_sector AS broad_sector FROM itpd_sectors"
   ))
-  colours_ref <- setDT(dbGetQuery(con,
+  colours_ref <- setDT(dbGetQuery(
+    con,
     "SELECT broad_sector_id, colour AS sector_color FROM itpd_colours"
   ))
 
@@ -218,7 +227,8 @@ se_aggregate_sectors <- function(d, con) {
   d <- merge(d, sectors_ref, by = "broad_sector_id")
   d <- merge(d, colours_ref, by = "broad_sector_id")
   d <- d[, .(trade_value = sum(trade_value, na.rm = TRUE)),
-         by = .(industry_id, broad_sector_id, sector_color, broad_sector, commodity_name)]
+    by = .(industry_id, broad_sector_id, sector_color, broad_sector, commodity_name)
+  ]
   return(d)
 }
 
@@ -230,7 +240,9 @@ se_treemap <- function(d, d2, title = NULL) {
   d <- setDT(copy(d))
   d2 <- setDT(copy(d2))
 
-  if (nrow(d) == 0L || nrow(d2) == 0L || !("broad_sector" %in% names(d))) return(NULL)
+  if (nrow(d) == 0L || nrow(d2) == 0L || !("broad_sector" %in% names(d))) {
+    return(NULL)
+  }
 
   d$broad_sector <- factor(d$broad_sector, levels = d2$broad_sector)
   setorder(d, broad_sector)
@@ -347,7 +359,6 @@ se_treemap <- function(d, d2, title = NULL) {
         return '<b>' + commodity + '</b><br/>Value: ' + value + '<br/>Percentage: ' + pct;
       }"
     ))
-
 }
 
 #' @title Add definite article for reporter names

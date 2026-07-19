@@ -15,7 +15,7 @@ mod_countries_server <- function(id, con) {
     inp_i <- reactive({
       input$i
     }) # importer
-    
+
     inp_e <- reactive({
       input$e
     }) # exporter
@@ -23,7 +23,7 @@ mod_countries_server <- function(id, con) {
     inp_t <- reactive({
       input$t
     }) # table
-    
+
     inp_fmt <- reactive({
       fmt <- input$fmt
       if (is.null(fmt) || !nzchar(fmt)) "csv" else fmt
@@ -62,30 +62,33 @@ mod_countries_server <- function(id, con) {
     })
 
     # Update year slider based on available data in the selected table ----
-    observeEvent(input$t, {
-      tbl <- inp_t()
-      yr_range <- tryCatch(
-        dbGetQuery(con, sprintf(
-          "SELECT MIN(year) AS min_yr, MAX(year) AS max_yr FROM %s",
-          tbl
-        )),
-        error = function(e) NULL
-      )
-      if (!is.null(yr_range) && nrow(yr_range) == 1 && !is.na(yr_range$min_yr)) {
-        min_yr <- as.integer(yr_range$min_yr)
-        max_yr <- as.integer(yr_range$max_yr)
-        cur_min <- min(input$y[1], input$y[2])
-        cur_max <- max(input$y[1], input$y[2])
-        updateSliderInput(session, "y",
-          min   = min_yr,
-          max   = max_yr,
-          value = c(
-            max(min_yr, min(cur_min, max_yr)),
-            min(max_yr, max(cur_max, min_yr))
-          )
+    observeEvent(input$t,
+      {
+        tbl <- inp_t()
+        yr_range <- tryCatch(
+          dbGetQuery(con, sprintf(
+            "SELECT MIN(year) AS min_yr, MAX(year) AS max_yr FROM %s",
+            tbl
+          )),
+          error = function(e) NULL
         )
-      }
-    }, ignoreInit = TRUE)
+        if (!is.null(yr_range) && nrow(yr_range) == 1 && !is.na(yr_range$min_yr)) {
+          min_yr <- as.integer(yr_range$min_yr)
+          max_yr <- as.integer(yr_range$max_yr)
+          cur_min <- min(input$y[1], input$y[2])
+          cur_max <- max(input$y[1], input$y[2])
+          updateSliderInput(session, "y",
+            min = min_yr,
+            max = max_yr,
+            value = c(
+              max(min_yr, min(cur_min, max_yr)),
+              min(max_yr, max(cur_max, min_yr))
+            )
+          )
+        }
+      },
+      ignoreInit = TRUE
+    )
 
     # Human-readable importer/exporter names for glue templates. Fallback to
     # the code when no display name is available.
@@ -175,7 +178,8 @@ mod_countries_server <- function(id, con) {
       e <- gsub("'", "''", importer)
 
       # Get sector reference data
-      sectors_ref <- setDT(dbGetQuery(con,
+      sectors_ref <- setDT(dbGetQuery(
+        con,
         "select industry_descr, industry_id from itpd_industries"
       ))
 
@@ -372,7 +376,9 @@ mod_countries_server <- function(id, con) {
 
     trd_rankings_exp_share_min_yr <- eventReactive(input$go, {
       result <- trd_rankings()[year == min(inp_y()) & exporter_iso3_dynamic == inp_e(), exp_share]
-      if (length(result) == 0 || is.na(result)) return(0)
+      if (length(result) == 0 || is.na(result)) {
+        return(0)
+      }
       return(result)
     })
 
@@ -386,7 +392,9 @@ mod_countries_server <- function(id, con) {
 
     trd_rankings_exp_share_max_yr <- eventReactive(input$go, {
       result <- trd_rankings()[year == max(inp_y()) & exporter_iso3_dynamic == inp_e(), exp_share]
-      if (length(result) == 0 || is.na(result)) return(0)
+      if (length(result) == 0 || is.na(result)) {
+        return(0)
+      }
       return(result)
     })
 
@@ -400,7 +408,9 @@ mod_countries_server <- function(id, con) {
 
     trd_rankings_imp_share_min_yr <- eventReactive(input$go, {
       result <- trd_rankings()[year == min(inp_y()) & exporter_iso3_dynamic == inp_e(), imp_share]
-      if (length(result) == 0 || is.na(result)) return(0)
+      if (length(result) == 0 || is.na(result)) {
+        return(0)
+      }
       return(result)
     })
 
@@ -414,7 +424,9 @@ mod_countries_server <- function(id, con) {
 
     trd_rankings_imp_share_max_yr <- eventReactive(input$go, {
       result <- trd_rankings()[year == max(inp_y()) & exporter_iso3_dynamic == inp_e(), imp_share]
-      if (length(result) == 0 || is.na(result)) return(0)
+      if (length(result) == 0 || is.na(result)) {
+        return(0)
+      }
       return(result)
     })
 
@@ -431,7 +443,7 @@ mod_countries_server <- function(id, con) {
     # Trade as average % of GDP over the selected period.
     # Inner-joined with dgd so only years with available GDP data contribute.
     gdp_pct_avg <- eventReactive(input$go, {
-      e      <- gsub("'", "''", inp_i())
+      e <- gsub("'", "''", inp_i())
       min_yr <- as.integer(min(inp_y()))
       max_yr <- as.integer(max(inp_y()))
 
@@ -478,7 +490,7 @@ mod_countries_server <- function(id, con) {
       )))
 
       d <- merge(d_exp, d_imp, by = "year", all = TRUE)
-      d <- merge(d, gdp, by = "year")  # inner join: keep only years with GDP data
+      d <- merge(d, gdp, by = "year") # inner join: keep only years with GDP data
       d[is.na(trade_exp), trade_exp := 0]
       d[is.na(trade_imp), trade_imp := 0]
       d[, exp_pct := round(trade_exp / gdp * 100, 2)]
@@ -649,7 +661,6 @@ mod_countries_server <- function(id, con) {
             return groupPrefix + (val || 0) + ' B' ;
           }"
         ))
-
     }) |>
       bindCache(inp_y(), inp_i(), inp_e(), inp_t()) |>
       bindEvent(input$go)
@@ -677,10 +688,10 @@ mod_countries_server <- function(id, con) {
 
     trd_line_exp <- reactive({
       importer <- inp_i()
-      exporter  <- inp_e()
-      e        <- gsub("'", "''", importer)
-      min_yr   <- as.integer(min(inp_y()))
-      max_yr   <- as.integer(max(inp_y()))
+      exporter <- inp_e()
+      e <- gsub("'", "''", importer)
+      min_yr <- as.integer(min(inp_y()))
+      max_yr <- as.integer(max(inp_y()))
 
       if (exporter == "ALL") {
         d <- setDT(dbGetQuery(con, sprintf(
@@ -782,10 +793,10 @@ mod_countries_server <- function(id, con) {
 
     trd_line_imp <- reactive({
       importer <- inp_i()
-      exporter  <- inp_e()
-      e        <- gsub("'", "''", importer)
-      min_yr   <- as.integer(min(inp_y()))
-      max_yr   <- as.integer(max(inp_y()))
+      exporter <- inp_e()
+      e <- gsub("'", "''", importer)
+      min_yr <- as.integer(min(inp_y()))
+      max_yr <- as.integer(max(inp_y()))
 
       if (exporter == "ALL") {
         d <- setDT(dbGetQuery(con, sprintf(

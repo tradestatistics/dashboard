@@ -6,48 +6,53 @@ mod_sectors_ui <- function(id) {
   tagList(
     div(
       # Filter -----
-      card(
-        h2("Filter"),
-        sliderInput(
-          ns("y"),
-          "Years",
-          min = available_yrs_min(),
-          max = available_yrs_max(),
-          value = c(2018, 2022),
-          sep = "",
-          step = 1,
-          ticks = FALSE,
-          width = "100%"
-        ),
-        selectInput(
+      col12(card(
+        h2("Filter")
+      )),
+      br(),
+      col12(card(sliderInput(
+        ns("y"),
+        "Years",
+        min = available_yrs_min(),
+        max = available_yrs_max(),
+        value = c(2018, 2022),
+        sep = "",
+        step = 1,
+        ticks = FALSE,
+        width = "100%"
+      ))),
+      br(),
+      row(
+        col6(card(selectInput(
           ns("s"),
           "Sectors",
           choices = list("Sectors" = tradestatisticsdashboard::sectors),
           selected = "1",
           selectize = TRUE,
           width = "100%"
-        ),
-        selectInput(
-          ns("t"),
-          "Dataset",
-          choices = c(
-            `International Trade and Production Database for Estimation (ITPD-E)` = "itpde",
-            `International Trade and Production Database for Simulation (ITPD-S)` = "itpds"
-          ),
-          selected = "itpde",
-          selectize = TRUE,
-          width = "100%"
-        ),
-        div(
-          style = "text-align:center;",
-          br(),
-          actionButton(
-            ns("go"),
-            "Give me the sector profile",
-            class = "btn btn-outline btn-dark"
-          )
-        )
+        ))),
+        col6(card(selectInput(
+              ns("t"),
+              "Dataset",
+              choices = c(
+                `International Trade and Production Database for Estimation (ITPD-E)` = "itpde",
+                `International Trade and Production Database for Simulation (ITPD-S)` = "itpds"
+              ),
+              selected = "itpde",
+              selectize = TRUE,
+              width = "100%"
+            ),
+            div(
+              style = "text-align:center;",
+              br(),
+              actionButton(
+                ns("go"),
+                "Give me the sector profile",
+                class = "btn btn-outline btn-dark"
+              )
+        )))
       ),
+      br(),
 
       # Trade ----
 
@@ -55,10 +60,7 @@ mod_sectors_ui <- function(id) {
         div(
           id = ns("title_section"),
           br(),
-          br(),
-          card(
-            htmlOutput(ns("title"), container = tags$h1)
-          )
+          card(htmlOutput(ns("title"), container = tags$h1))
         )
       ),
 
@@ -68,14 +70,16 @@ mod_sectors_ui <- function(id) {
         div(
           id = ns("aggregated_trade"),
           br(),
+          col12(
+            card(
+              htmlOutput(ns("trd_stl"), container = tags$h2),
+              br(),
+              htmlOutput(ns("trd_stl_trade"), container = tags$h4),
+              htmlOutput(ns("trd_smr_trade"), container = tags$p)
+            )
+          ),
           br(),
-          card(
-            htmlOutput(ns("trd_stl"), container = tags$h2),
-            htmlOutput(ns("trd_stl_trade"), container = tags$h4),
-            htmlOutput(ns("trd_smr_trade"), container = tags$p),
-            p("The chart shows global trade trends for this sector. Trade values represent the sum of all countries' imports."),
-            d3po_output(ns("trd_exc_columns_agg"), height = "500px")
-          )
+          col12(card(d3po_output(ns("trd_exc_columns_agg"), height = "500px")))
         )
       ),
 
@@ -85,14 +89,29 @@ mod_sectors_ui <- function(id) {
         div(
           id = ns("detailed_trade_exp"),
           br(),
+          # row(
+          #   col4(
+          #     card(htmlOutput(ns("exp_tt_yr"), container = tags$h2)),
+          #   ),
+          #   col8(
+          #     card(p("Bar charts show the top exporters for this sector. Treemaps displays all exporters."))
+          #   )
+          # ),
+          col12(
+            card(
+              htmlOutput(ns("exp_tt_yr"), container = tags$h2),
+              p("Bar charts show the top exporters for this sector. Treemaps displays all exporters.")
+            )
+          ),
           br(),
-          card(
-            htmlOutput(ns("exp_tt_yr"), container = tags$h2),
-            p("Bar charts show the top exporters for this sector. Treemaps displays all exporters."),
-            d3po_output(ns("exp_col_min_yr_usd"), height = "500px"),
-            d3po_output(ns("exp_col_max_yr_usd"), height = "500px"),
-            d3po_output(ns("exp_tm_dtl_min_yr"), height = "500px"),
-            d3po_output(ns("exp_tm_dtl_max_yr"), height = "500px")
+          row(
+            col6(card(d3po_output(ns("exp_col_min_yr_usd"), height = "500px"))),
+            col6(card(d3po_output(ns("exp_col_max_yr_usd"), height = "500px")))
+          ),
+          br(),
+          row(
+            col6(card(d3po_output(ns("exp_tm_dtl_min_yr"), height = "500px"))),
+            col6(card(d3po_output(ns("exp_tm_dtl_max_yr"), height = "500px")))
           )
         )
       ),
@@ -103,14 +122,20 @@ mod_sectors_ui <- function(id) {
         div(
           id = ns("detailed_trade_imp"),
           br(),
+          col12(
+            card(
+              htmlOutput(ns("imp_tt_yr"), container = tags$h2),
+              p("Bar charts show the top importers for this sector. Treemaps display all importers.")
+            )
+          ),
           br(),
-          card(
-            htmlOutput(ns("imp_tt_yr"), container = tags$h2),
-            p("Bar charts show the top importers for this sector. Treemaps display all importers."),
-            d3po_output(ns("imp_col_min_yr_usd"), height = "500px"),
-            d3po_output(ns("imp_col_max_yr_usd"), height = "500px"),
-            d3po_output(ns("imp_tm_dtl_min_yr"), height = "500px"),
-            d3po_output(ns("imp_tm_dtl_max_yr"), height = "500px")
+          row(
+            col6(card(d3po_output(ns("imp_col_min_yr_usd"), height = "500px"))),
+            col6(card(d3po_output(ns("imp_col_max_yr_usd"), height = "500px")))
+          ),
+          row(
+            col6(card(d3po_output(ns("imp_tm_dtl_min_yr"), height = "500px"))),
+            col6(card(d3po_output(ns("imp_tm_dtl_max_yr"), height = "500px")))
           )
         )
       ),
@@ -119,7 +144,6 @@ mod_sectors_ui <- function(id) {
       hidden(
         div(
           id = ns("download_data"),
-          br(),
           br(),
           card(
             htmlOutput(ns("dwn_stl"), container = tags$h2),
