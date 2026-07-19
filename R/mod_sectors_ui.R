@@ -31,26 +31,28 @@ mod_sectors_ui <- function(id) {
           selectize = TRUE,
           width = "100%"
         ))),
-        col6(card(selectInput(
-              ns("t"),
-              "Dataset",
-              choices = c(
-                `International Trade and Production Database for Estimation (ITPD-E)` = "itpde",
-                `International Trade and Production Database for Simulation (ITPD-S)` = "itpds"
-              ),
-              selected = "itpde",
-              selectize = TRUE,
-              width = "100%"
+        col6(card(
+          selectInput(
+            ns("t"),
+            "Dataset",
+            choices = c(
+              `International Trade and Production Database for Estimation (ITPD-E)` = "itpde",
+              `International Trade and Production Database for Simulation (ITPD-S)` = "itpds"
             ),
-            div(
-              style = "text-align:center;",
-              br(),
-              actionButton(
-                ns("go"),
-                "Give me the sector profile",
-                class = "btn btn-outline btn-dark"
-              )
-        )))
+            selected = "itpde",
+            selectize = TRUE,
+            width = "100%"
+          ),
+          div(
+            style = "text-align:center;",
+            br(),
+            actionButton(
+              ns("go"),
+              "Give me the sector profile",
+              class = "btn btn-outline btn-dark"
+            )
+          )
+        ))
       ),
       br(),
 
