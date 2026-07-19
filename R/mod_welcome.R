@@ -10,7 +10,7 @@ mod_welcome_ui <- function(id) {
             br(),
             br(),
             p("Open Trade Statistics started as a visualization project back in 2017."),
-            p(HTML('The data used here is provided by the USITC.')),
+            p(HTML('The data used here is provided by the United States International Trade Commission (<a href="https://www.usitc.gov/">USITC</a>).')),
             p("Explore the country and sector profiles using the navigation menu."),
             br(),
             p("Check the R package to download the data displayed here:"),

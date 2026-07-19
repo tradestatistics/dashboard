@@ -631,18 +631,10 @@ mod_countries_server <- function(id, con) {
 
       d3po(d) |>
         po_bar(
-          daes(
-            x = .data$year,
-            y = .data$trade,
-            group = .data$flow,
-            color = .data$color,
-            stack = FALSE
-          )
+          daes(x = .data$year, y = .data$trade, group = .data$flow, color = .data$color, stack = FALSE)
         ) |>
         po_labels(
-          x = "Year",
-          y = "Trade Value (USD billion)",
-          title = trd_exc_columns_title()
+          x = "Year", y = "Trade Value (USD billion)", title = trd_exc_columns_title()
         ) |>
         po_format(
           y = format(.data$trade, big.mark = " ", scientific = FALSE)
