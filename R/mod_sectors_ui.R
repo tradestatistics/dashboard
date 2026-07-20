@@ -7,7 +7,7 @@ mod_sectors_ui <- function(id) {
     div(
       # Filter -----
       col12(card(
-        h2("Filter")
+        h2("Subset the data")
       )),
       br(),
       col12(card(sliderInput(
@@ -26,7 +26,8 @@ mod_sectors_ui <- function(id) {
         col6(card(selectInput(
           ns("s"),
           "Sectors",
-          choices = list("Sectors" = tradestatisticsdashboard::sectors),
+          # choices = list("Sectors" = tradestatisticsdashboard::sectors),
+          choices = tradestatisticsdashboard::sectors,
           selected = "1",
           selectize = TRUE,
           width = "100%"
@@ -54,7 +55,6 @@ mod_sectors_ui <- function(id) {
           )
         ))
       ),
-      br(),
 
       # Trade ----
 

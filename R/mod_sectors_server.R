@@ -28,6 +28,34 @@ mod_sectors_server <- function(id, con) {
     tbl_agg <- reactive(paste0(inp_t(), "_imp_exp"))
     tbl_dtl <- reactive(inp_t())
 
+    # Force every slow (DB-backed) reactive to compute here, eagerly and in a
+    # known order, bracketed by showProgress()/hideProgress(). This MUST be
+    # the first thing registered that depends on input$go: tabler's reactive
+    # engine invalidates/reruns input$go's dependents one at a time, in the
+    # order they were registered, and each one's *entire* downstream cascade
+    # (e.g. an output eagerly re-pulling a bindEvent(input$go) reactive) runs
+    # to completion before the next dependent gets its turn. If this observer
+    # were registered later (e.g. after the reactives/outputs below), some
+    # other output would already eagerly trigger a heavy DB-backed reactive
+    # before this observer ever ran - so showProgress() would only fire once
+    # that other (already slow) work is done, i.e. right at the end, with the
+    # UI looking frozen/stale for the preceding few seconds.
+    observeEvent(input$go, {
+      withProgress(session, "Loading data...", {
+        df_agg()
+        df_dtl()
+        trd_exc_columns_agg()
+        exp_col_min_yr_usd()
+        exp_col_max_yr_usd()
+        exp_tm_dtl_min_yr()
+        exp_tm_dtl_max_yr()
+        imp_col_min_yr_usd()
+        imp_col_max_yr_usd()
+        imp_tm_dtl_min_yr()
+        imp_tm_dtl_max_yr()
+      })
+    })
+
     # Update year slider based on available data in the selected table ----
     observeEvent(input$t,
       {
@@ -75,8 +103,6 @@ mod_sectors_server <- function(id, con) {
     ## Data ----
 
     df_agg <- reactive({
-      showProgress(session, text = "Loading data...")
-
       yrs <- inp_y()
       scode <- inp_s()
 
@@ -555,11 +581,7 @@ mod_sectors_server <- function(id, con) {
       d2 <- unique(d[, .(continent_name, country_color = region_colour)])
       setorder(d2, continent_name)
 
-      out <- od_treemap(d, d2, title = imp_tt_max_yr())
-
-      hideProgress(session)
-
-      return(out)
+      od_treemap(d, d2, title = imp_tt_max_yr())
     }) |>
       bindCache(inp_y(), inp_s(), inp_t()) |>
       bindEvent(input$go)

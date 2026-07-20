@@ -7,7 +7,7 @@ mod_countries_ui <- function(id) {
     div(
       # Filter -----
       col12(card(
-        h2("Filter")
+        h2("Subset the data")
       )),
       br(),
       col12(card(sliderInput(
@@ -23,7 +23,7 @@ mod_countries_ui <- function(id) {
       ))),
       br(),
       row(
-        col6(card(selectInput(
+        col4(card(selectInput(
           ns("i"),
           "Importer",
           choices = tradestatisticsdashboard::countries[tradestatisticsdashboard::countries != "ALL"],
@@ -31,7 +31,7 @@ mod_countries_ui <- function(id) {
           selectize = TRUE,
           width = "100%"
         ))),
-        col6(card(selectInput(
+        col4(card(selectInput(
           ns("e"),
           "Exporter",
           choices = c(
@@ -40,11 +40,8 @@ mod_countries_ui <- function(id) {
           selected = "ALL",
           selectize = TRUE,
           width = "100%"
-        )))
-      ),
-      br(),
-      col12(
-        card(
+        ))),
+        col4(card(
           selectInput(
             ns("t"),
             "Dataset",
@@ -65,7 +62,7 @@ mod_countries_ui <- function(id) {
               class = "btn btn-outline btn-dark"
             )
           )
-        )
+        ))
       ),
 
       # Trade ----
