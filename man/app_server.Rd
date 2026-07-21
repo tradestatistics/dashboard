@@ -7,7 +7,7 @@
 app_server(input, output, session)
 }
 \arguments{
-\item{input, output, session}{Internal parameters for Shiny. DO NOT REMOVE.}
+\item{input, output, session}{Internal parameters. DO NOT REMOVE.}
 }
 \description{
 The application server-side

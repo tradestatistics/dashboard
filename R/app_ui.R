@@ -1,4 +1,5 @@
 #' @title The application User-Interface
+#' @export
 app_ui <- function() {
   tagList(
     # External resources

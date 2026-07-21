@@ -1,5 +1,6 @@
 #' @title The application server-side
-#' @param input,output,session Internal parameters for Shiny. DO NOT REMOVE.
+#' @param input,output,session Internal parameters. DO NOT REMOVE.
+#' @export
 app_server <- function(input, output, session) {
   # Single shared SQL connection for the whole session ----
   con <- open_con()
