@@ -2,7 +2,7 @@
 #' @import tabler
 #' @import d3po
 #' @importFrom cachem cache_disk
-#' @importFrom data.table `:=` .N .I .SD copy data.table fifelse frankv rbindlist setDT setnames setorder
+#' @importFrom data.table `:=` .N .I .SD copy data.table fifelse frankv rbindlist setDT setnames setorder uniqueN
 #' @importFrom DBI dbConnect dbDisconnect dbIsValid dbGetQuery
 #' @importFrom glue glue
 #' @importFrom htmlwidgets JS
@@ -15,9 +15,9 @@
 utils::globalVariables(c(
   ".", ".data",
   "bal_rank", "broad_sector", "broad_sector_id",
-  "color", "commodity_name", "continent_name", "country", "country_color", "country_name",
+  "case_id", "color", "commodity_name", "continent_name", "country", "country_color", "country_name",
   "exp_pct", "exp_share", "exporter", "exporter_iso3_dynamic",
-  "flow",
+  "financial", "flow",
   "imp_pct", "imp_share", "importer", "industry_id",
   "n",
   "region_colour",

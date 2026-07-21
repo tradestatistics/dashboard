@@ -6,6 +6,10 @@ mod_countries_server <- function(id, con) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # Flat name -> code lookup for country display names (countries data is
+    # grouped by region for the select inputs, see flatten_countries()).
+    countries_lookup <- flatten_countries()
+
     # User inputs ----
     inp_y <- reactive({
       y <- c(min(input$y[1], input$y[2]), max(input$y[1], input$y[2]))
@@ -58,6 +62,10 @@ mod_countries_server <- function(id, con) {
         exp_tm_dtl_max_yr()
         imp_tm_dtl_min_yr()
         imp_tm_dtl_max_yr()
+        reporter_context()
+        bilateral_context()
+        reporter_sanctions()
+        partner_sanctions()
       })
     })
 
@@ -93,19 +101,11 @@ mod_countries_server <- function(id, con) {
     # Human-readable importer/exporter names for glue templates. Fallback to
     # the code when no display name is available.
     rname <- eventReactive(input$go, {
-      out <- names(tradestatisticsdashboard::countries[tradestatisticsdashboard::countries == inp_i()])
-      if (length(out) == 0 || is.na(out) || nchar(out) == 0) {
-        return(inp_i())
-      }
-      out
+      country_name_from_code(inp_i(), countries_lookup)
     })
 
     pname <- eventReactive(input$go, {
-      out <- names(tradestatisticsdashboard::countries[tradestatisticsdashboard::countries == inp_e()])
-      if (length(out) == 0 || is.na(out) || nchar(out) == 0) {
-        return(inp_e())
-      }
-      out
+      country_name_from_code(inp_e(), countries_lookup)
     })
 
     title <- eventReactive(input$go, {
@@ -569,6 +569,83 @@ mod_countries_server <- function(id, con) {
       return(d$total_trade)
     })
 
+    ### Background / country context ----
+
+    # Population, GDP per capita and WTO/EU membership for the reporter,
+    # taken from the most recent year within the selected range that has
+    # data. If none of the selected years have data (e.g. the range is more
+    # recent than the underlying dataset), no row is returned and this
+    # section is omitted rather than showing stale figures from outside the
+    # requested period.
+    reporter_context <- eventReactive(input$go, {
+      e <- gsub("'", "''", inp_i())
+      min_yr <- as.integer(min(inp_y()))
+      max_yr <- as.integer(max(inp_y()))
+      setDT(dbGetQuery(con, sprintf(
+        "SELECT year, pop_o, gdp_wdi_cap_const_o, member_wto_o, member_eu_o
+         FROM dgd
+         WHERE iso3_dynamic_o = '%s' AND year BETWEEN %d AND %d
+           AND pop_o IS NOT NULL AND gdp_wdi_cap_const_o IS NOT NULL
+         ORDER BY year DESC
+         LIMIT 1",
+        e, min_yr, max_yr
+      )))
+    })
+
+    # Bilateral gravity context (distance, contiguity, language, colonial ties)
+    # only meaningful when a specific partner is selected. Same rule as
+    # reporter_context(): restricted to the selected year range so nothing
+    # outside the requested period is shown.
+    bilateral_context <- eventReactive(input$go, {
+      if (inp_e() == "ALL") {
+        return(data.table())
+      }
+      e <- gsub("'", "''", inp_i())
+      i <- gsub("'", "''", inp_e())
+      min_yr <- as.integer(min(inp_y()))
+      max_yr <- as.integer(max(inp_y()))
+      setDT(dbGetQuery(con, sprintf(
+        "SELECT year, distance, colony_ever, common_colonizer, common_language, contiguity
+         FROM dgd
+         WHERE iso3_dynamic_o = '%s' AND iso3_dynamic_d = '%s' AND year BETWEEN %d AND %d
+         ORDER BY year DESC
+         LIMIT 1",
+        e, i, min_yr, max_yr
+      )))
+    })
+
+    reporter_sanctions <- eventReactive(input$go, {
+      fetch_sanctions(con, inp_i(), inp_y())
+    })
+
+    partner_sanctions <- eventReactive(input$go, {
+      if (inp_e() == "ALL") {
+        return(data.table())
+      }
+      fetch_sanctions(con, inp_e(), inp_y())
+    })
+
+    country_background_txt <- eventReactive(input$go, {
+      reporter_disp <- paste(r_add_upp_the(rname()), rname())
+      partner_disp <- if (inp_e() != "ALL") paste(r_add_the(pname()), pname()) else NULL
+
+      context_txt <- gravity_context_narrative(
+        reporter_name = reporter_disp,
+        reporter_info = reporter_context(),
+        partner_name = partner_disp,
+        bilateral_info = bilateral_context()
+      )
+
+      sanctions_reporter_txt <- sanctions_narrative(reporter_sanctions(), reporter_disp, countries_lookup)
+      sanctions_partner_txt <- if (inp_e() != "ALL") {
+        sanctions_narrative(partner_sanctions(), paste(r_add_upp_the(pname()), pname()), countries_lookup)
+      } else {
+        ""
+      }
+
+      paste(context_txt, sanctions_reporter_txt, sanctions_partner_txt)
+    })
+
     ### Text/Visual elements ----
 
     trd_smr_txt_exp <- eventReactive(input$go, {
@@ -870,8 +947,13 @@ mod_countries_server <- function(id, con) {
     ## Dynamic / server side selectors ----
 
     observeEvent(input$i, {
+      # countries is grouped by region (list of vectors); filter each group's
+      # vector individually and drop groups left empty, rather than comparing
+      # the whole (nested) list to a scalar.
+      remaining <- lapply(tradestatisticsdashboard::countries, function(x) x[x != input$i])
+      remaining <- remaining[lengths(remaining) > 0]
       updateSelectizeInput(session, "e",
-        choices = c(`All countries` = "ALL", tradestatisticsdashboard::countries[tradestatisticsdashboard::countries != input$i]),
+        choices = c(`All countries` = "ALL", remaining),
         selected = "ALL",
         server = TRUE
       )
@@ -911,6 +993,10 @@ mod_countries_server <- function(id, con) {
     output$title <- renderText({
       title()
     })
+
+    ## Background information ----
+
+    output$country_background <- renderText(country_background_txt())
 
     ## Country profile ----
 
@@ -1014,6 +1100,7 @@ mod_countries_server <- function(id, con) {
     observeEvent(input$go, {
       if (input$go > 0) {
         show(id = "title_section")
+        show(id = "background_info")
         show(id = "aggregated_trade")
         show(id = "detailed_trade_exp")
         show(id = "detailed_trade_imp")

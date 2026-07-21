@@ -416,6 +416,189 @@ growth_rate <- function(p, q, t) {
   (p / q)^(1 / (max(t) - min(t))) - 1
 }
 
+# COUNTRY LOOKUPS ----
+
+#' @title Flatten the region-grouped countries data into a single name -> code vector
+#' @description `tradestatisticsdashboard::countries` is a list of named vectors
+#' (one per region, name = country, value = dynamic code), used to build grouped
+#' select inputs. This collapses it into one flat named vector for lookups.
+flatten_countries <- function() {
+  do.call(c, unname(tradestatisticsdashboard::countries))
+}
+
+#' @title Look up a country's display name from its dynamic code
+#' @param code Dynamic country code (e.g. "GBR")
+#' @param lookup Flat name -> code vector, as returned by `flatten_countries()`
+#' @return The country name, or `code` itself if not found
+country_name_from_code <- function(code, lookup) {
+  if (is.null(code) || length(code) == 0 || is.na(code) || nchar(code) == 0) {
+    return(code)
+  }
+  out <- names(lookup)[match(code, lookup)]
+  if (length(out) == 0 || is.na(out[1]) || nchar(out[1]) == 0) {
+    return(code)
+  }
+  out[1]
+}
+
+# NARRATIVE TEXT (BACKGROUND / SANCTIONS) ----
+
+#' @title Join a vector of items into a human-readable "a, b and c" list
+format_list_and <- function(x) {
+  x <- unique(x)
+  x <- x[!is.na(x) & nchar(x) > 0]
+  if (length(x) == 0) {
+    return("")
+  }
+  if (length(x) == 1) {
+    return(x)
+  }
+  if (length(x) == 2) {
+    return(paste(x, collapse = " and "))
+  }
+  paste0(paste(x[-length(x)], collapse = ", "), " and ", x[length(x)])
+}
+
+#' @title Human-readable labels for GSDB sanction objectives
+sanction_objective_labels <- c(
+  obj_democracy = "promoting democracy",
+  obj_destab_regime = "destabilizing the government",
+  obj_end_war = "ending a war",
+  obj_human_rights = "addressing human rights violations",
+  obj_other = "other objectives",
+  obj_policy_change = "policy change",
+  obj_prevent_war = "preventing war",
+  obj_territorial_conflict = "resolving a territorial conflict",
+  obj_terrorism = "countering terrorism"
+)
+
+#' @title Fetch GSDB dyadic sanctions imposed against a country in a year range
+#' @param con SQL connection
+#' @param code Dynamic code of the sanctioned country
+#' @param years Numeric vector of years to filter on (min/max are used)
+fetch_sanctions <- function(con, code, years) {
+  if (is.null(code) || is.na(code) || nchar(code) == 0) {
+    return(data.table())
+  }
+  e <- gsub("'", "''", code)
+  min_yr <- as.integer(min(years))
+  max_yr <- as.integer(max(years))
+  setDT(dbGetQuery(con, sprintf(
+    "SELECT case_id, sanctioning_state_dynamic, trade, financial,
+            obj_democracy, obj_destab_regime, obj_end_war, obj_human_rights, obj_other,
+            obj_policy_change, obj_prevent_war, obj_territorial_conflict, obj_terrorism,
+            suc_failed, suc_nego_settlement, suc_ongoing, suc_success_part, suc_success_total
+     FROM gsdb_dyadic
+     WHERE sanctioned_state_dynamic = '%s' AND year BETWEEN %d AND %d",
+    e, min_yr, max_yr
+  )))
+}
+
+#' @title Build a Wikipedia-style paragraph describing sanctions applied against a country
+#' @param d data.table as returned by `fetch_sanctions()`
+#' @param country_name Display name of the sanctioned country (article included, e.g. "the United Kingdom")
+#' @param lookup Flat name -> code vector, as returned by `flatten_countries()`, used to name the senders
+sanctions_narrative <- function(d, country_name, lookup) {
+  if (is.null(d) || nrow(d) == 0) {
+    return("")
+  }
+
+  n_cases <- uniqueN(d$case_id)
+  n_trade <- uniqueN(d[trade == 1, case_id])
+  n_financial <- uniqueN(d[financial == 1, case_id])
+
+  senders_codes <- unique(d$sanctioning_state_dynamic)
+  senders <- vapply(senders_codes, country_name_from_code, character(1), lookup = lookup)
+  senders_txt <- format_list_and(senders)
+
+  obj_cols <- intersect(names(sanction_objective_labels), names(d))
+  objectives <- sanction_objective_labels[obj_cols[vapply(obj_cols, function(col) any(d[[col]] == 1, na.rm = TRUE), logical(1))]]
+  objectives_txt <- format_list_and(unname(objectives))
+
+  outcome_txt <- if (any(d$suc_success_total == 1, na.rm = TRUE)) {
+    "were largely successful"
+  } else if (any(d$suc_success_part == 1, na.rm = TRUE)) {
+    "were partially successful"
+  } else if (any(d$suc_nego_settlement == 1, na.rm = TRUE)) {
+    "led to a negotiated settlement"
+  } else if (any(d$suc_ongoing == 1, na.rm = TRUE)) {
+    "remain ongoing"
+  } else if (any(d$suc_failed == 1, na.rm = TRUE)) {
+    "failed to achieve their stated goals"
+  } else {
+    "had an undetermined outcome"
+  }
+
+  type_txt <- if (n_trade > 0 && n_financial > 0) {
+    "both trade and financial sanctions"
+  } else if (n_trade > 0) {
+    "trade sanctions"
+  } else if (n_financial > 0) {
+    "financial sanctions"
+  } else {
+    "sanctions"
+  }
+
+  objectives_sentence <- if (nchar(objectives_txt) > 0) {
+    glue(" The stated objectives included { objectives_txt }.")
+  } else {
+    ""
+  }
+
+  glue("{ country_name } was subject to { n_cases } sanction{ ifelse(n_cases == 1, '', 's') } imposed by { senders_txt }, involving { type_txt }.{ objectives_sentence } These measures { outcome_txt }.")
+}
+
+#' @title Build a Wikipedia-style paragraph with population, GDP per capita and bilateral gravity context
+#' @param reporter_name Display name of the reporter country (article included)
+#' @param reporter_info Single-row data.table from the `dgd` reporter-context query
+#' @param partner_name Display name of the partner country (article included), or `NULL` for multilateral profiles
+#' @param bilateral_info Single-row data.table from the `dgd` bilateral-context query, or `NULL`
+gravity_context_narrative <- function(reporter_name, reporter_info, partner_name = NULL, bilateral_info = NULL) {
+  base <- ""
+  if (!is.null(reporter_info) && nrow(reporter_info) > 0) {
+    yr <- reporter_info$year[1]
+    pop <- reporter_info$pop_o[1]
+    gdp_cap <- reporter_info$gdp_wdi_cap_const_o[1]
+
+    if (!is.na(pop) && !is.na(gdp_cap)) {
+      pop_txt <- paste0(format(round(pop, 1), nsmall = 1), " million")
+      gdp_cap_txt <- paste0("$", formatC(round(gdp_cap), format = "d", big.mark = ","))
+      base <- glue("As of { yr }, { reporter_name } had a population of { pop_txt } and a GDP per capita of { gdp_cap_txt }.")
+      base <- gsub(", The", ", the", base)
+    }
+
+    membership <- character(0)
+    if (isTRUE(reporter_info$member_wto_o[1] == 1)) membership <- c(membership, "the World Trade Organization (WTO)")
+    if (isTRUE(reporter_info$member_eu_o[1] == 1)) membership <- c(membership, "the European Union (EU)")
+    if (length(membership) > 0) {
+      base <- paste0(base, glue(" { reporter_name } is a member of { format_list_and(membership) }."))
+    }
+  }
+
+  bilateral_sentence <- ""
+  if (!is.null(bilateral_info) && nrow(bilateral_info) > 0 && !is.null(partner_name)) {
+    dist <- bilateral_info$distance[1]
+    if (!is.na(dist)) {
+      dist_txt <- paste0(formatC(round(dist), format = "d", big.mark = ","), " km")
+      bilateral_sentence <- paste0(bilateral_sentence, glue(" { reporter_name } and { partner_name } are separated by a distance of approximately { dist_txt }."))
+    }
+    if (isTRUE(bilateral_info$contiguity[1] == 1)) {
+      bilateral_sentence <- paste0(bilateral_sentence, " The two countries share a land border.")
+    }
+    if (isTRUE(bilateral_info$common_language[1] == 1)) {
+      bilateral_sentence <- paste0(bilateral_sentence, " They also share a common official language.")
+    }
+    if (isTRUE(bilateral_info$colony_ever[1] == 1)) {
+      bilateral_sentence <- paste0(bilateral_sentence, glue(" { reporter_name } and { partner_name } have a shared colonial history."))
+    }
+    if (isTRUE(bilateral_info$common_colonizer[1] == 1)) {
+      bilateral_sentence <- paste0(bilateral_sentence, " Both countries were once part of the same colonial empire.")
+    }
+  }
+
+  trimws(paste0(base, bilateral_sentence))
+}
+
 #' @title Typing reactiveValues is too long
 #' @param ... elements to pass to the function
 #' @rdname reactives

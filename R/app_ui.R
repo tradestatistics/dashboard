@@ -10,7 +10,7 @@ app_ui <- function() {
       theme = "light",
       base = "stone",
       color = "teal",
-      radius = 1.5,
+      radius = 1.0,
       show_theme_button = FALSE,
       navbar = navbar_menu(
         brand = sidebar_brand(text = "Open Trade Statistics", href = "./"),

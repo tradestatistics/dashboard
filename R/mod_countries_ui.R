@@ -65,6 +65,16 @@ mod_countries_ui <- function(id) {
         )
       ),
 
+      ## Background information ----
+
+      hidden(
+        div(
+          id = ns("background_info"),
+          br(),
+          col12(card(htmlOutput(ns("country_background"), container = tags$p)))
+        )
+      ),
+
       ## Aggregated trade -----
 
       hidden(
