@@ -480,15 +480,15 @@ format_list_and <- function(x) {
 
 #' @title Human-readable labels for GSDB sanction objectives
 sanction_objective_labels <- c(
-  obj_democracy = "promoting democracy",
-  obj_destab_regime = "destabilizing the government",
-  obj_end_war = "ending a war",
-  obj_human_rights = "addressing human rights violations",
-  obj_other = "other objectives",
-  obj_policy_change = "policy change",
-  obj_prevent_war = "preventing war",
-  obj_territorial_conflict = "resolving a territorial conflict",
-  obj_terrorism = "countering terrorism"
+  obj_democracy = "Promoting democracy",
+  obj_destab_regime = "Destabilizing the government",
+  obj_end_war = "Ending a war",
+  obj_human_rights = "Addressing human rights violations",
+  obj_policy_change = "Policy change",
+  obj_prevent_war = "Preventing war",
+  obj_territorial_conflict = "Resolving a territorial conflict",
+  obj_terrorism = "Countering terrorism",
+  obj_other = "Other objectives"
 )
 
 #' @title Fetch GSDB dyadic sanctions imposed against a country in a year range
@@ -504,8 +504,9 @@ fetch_sanctions <- function(con, code, years) {
   max_yr <- as.integer(max(years))
   setDT(dbGetQuery(con, sprintf(
     "SELECT case_id, year, sanctioning_state_dynamic, trade, financial,
-            obj_democracy, obj_destab_regime, obj_end_war, obj_human_rights, obj_other,
-            obj_policy_change, obj_prevent_war, obj_territorial_conflict, obj_terrorism,
+            obj_democracy, obj_destab_regime, obj_end_war, obj_human_rights,
+            obj_policy_change, obj_prevent_war, obj_territorial_conflict,
+            obj_terrorism, obj_other,
             suc_failed, suc_nego_settlement, suc_ongoing, suc_success_part, suc_success_total
      FROM gsdb_dyadic
      WHERE sanctioned_state_dynamic = '%s' AND year BETWEEN %d AND %d",
@@ -555,20 +556,6 @@ sanctions_narrative <- function(d, country_name, lookup) {
   }
 
   obj_cols <- intersect(names(sanction_objective_labels), names(d))
-  suc_cols <- intersect(
-    c("suc_failed", "suc_nego_settlement", "suc_ongoing", "suc_success_part", "suc_success_total"),
-    names(d)
-  )
-
-  case_summary <- d[, c(
-    list(
-      year_min = min(year),
-      year_max = max(year),
-      trade = max(trade, na.rm = TRUE),
-      financial = max(financial, na.rm = TRUE)
-    ),
-    lapply(.SD, function(x) max(x, na.rm = TRUE))
-  ), by = .(case_id, sanctioning_state_dynamic), .SDcols = c(obj_cols, suc_cols)]
 
   case_outcome <- function(row) {
     if (isTRUE(row$suc_success_total == 1)) {
@@ -586,8 +573,33 @@ sanctions_narrative <- function(d, country_name, lookup) {
     }
   }
 
+  # Lower rank = takes precedence when the same sender/year is covered by more
+  # than one case with a different outcome.
+  outcome_priority <- c(
+    "successful" = 1, "partially successful" = 2, "negotiated settlement" = 3,
+    "ongoing" = 4, "failed" = 5, "undetermined outcome" = 6
+  )
+
+  # Merge one sender's per-year outcomes into "year_range, outcome" entries,
+  # combining across cases (contiguous years with the same outcome collapse
+  # into a single range, even if they came from different sanction cases).
+  sender_entries <- function(rows) {
+    rows <- copy(rows)
+    rows[, outcome := vapply(seq_len(.N), function(i) case_outcome(rows[i]), character(1))]
+    rows[, priority := outcome_priority[outcome]]
+    setorder(rows, priority)
+    rows <- unique(rows, by = "year")
+    setorder(rows, year)
+    n <- nrow(rows)
+    grp <- cumsum(c(TRUE, diff(rows$year) != 1L | rows$outcome[-1] != rows$outcome[-n]))
+    ranges <- rows[, .(start = min(year), end = max(year), outcome = outcome[1]), by = grp]
+    vapply(seq_len(nrow(ranges)), function(i) {
+      paste0(format_year_range(ranges$start[i], ranges$end[i]), ", ", ranges$outcome[i])
+    }, character(1))
+  }
+
   build_section <- function(type_col, type_label) {
-    sub <- case_summary[get(type_col) == 1]
+    sub <- d[get(type_col) == 1]
     if (nrow(sub) == 0) {
       return(NULL)
     }
@@ -598,13 +610,13 @@ sanctions_narrative <- function(d, country_name, lookup) {
       if (nrow(rows) == 0) {
         next
       }
-      entries <- vapply(seq_len(nrow(rows)), function(i) {
-        row <- rows[i]
-        sender <- country_name_from_code(row$sanctioning_state_dynamic, lookup)
-        sender <- gsub("\\s+\\(*.ISO.*\\)", "", sender)
-        rng <- format_year_range(row$year_min, row$year_max)
-        paste0(sender, " (", rng, ", ", case_outcome(row), ")")
-      }, character(1))
+      senders <- unique(rows$sanctioning_state_dynamic)
+      entries <- unlist(lapply(senders, function(sender) {
+        sender_rows <- rows[sanctioning_state_dynamic == sender]
+        sender_name <- country_name_from_code(sender, lookup)
+        sender_name <- gsub("\\s+\\(*.ISO.*\\)", "", sender_name)
+        paste0(sender_name, " (", sender_entries(sender_rows), ")")
+      }))
       items[[length(items) + 1]] <- tags$li(
         tags$strong(sanction_objective_labels[[col]]), ": ", paste(entries, collapse = ", ")
       )
