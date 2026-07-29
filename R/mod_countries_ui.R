@@ -71,7 +71,7 @@ mod_countries_ui <- function(id) {
         div(
           id = ns("background_info"),
           br(),
-          col12(card(htmlOutput(ns("country_background"), container = tags$p)))
+          col12(card(htmlOutput(ns("country_background"), container = tags$div)))
         )
       ),
 

@@ -503,7 +503,7 @@ fetch_sanctions <- function(con, code, years) {
   min_yr <- as.integer(min(years))
   max_yr <- as.integer(max(years))
   setDT(dbGetQuery(con, sprintf(
-    "SELECT case_id, sanctioning_state_dynamic, trade, financial,
+    "SELECT case_id, year, sanctioning_state_dynamic, trade, financial,
             obj_democracy, obj_destab_regime, obj_end_war, obj_human_rights, obj_other,
             obj_policy_change, obj_prevent_war, obj_territorial_conflict, obj_terrorism,
             suc_failed, suc_nego_settlement, suc_ongoing, suc_success_part, suc_success_total
@@ -513,7 +513,39 @@ fetch_sanctions <- function(con, code, years) {
   )))
 }
 
-#' @title Build a Wikipedia-style paragraph describing sanctions applied against a country
+#' @title Format a year, or a range of years, as "2017" or "2017-2022"
+#' @param a start year
+#' @param b end year
+format_year_range <- function(a, b) {
+  if (a == b) as.character(a) else paste0(a, "-", b)
+}
+
+#' @title Compute contiguous year ranges where a 0/1 flag column is active
+#' @description Used to turn a per-year membership indicator (e.g. WTO/EU
+#'   membership) into human-readable periods such as `"1995-2022"`, handling
+#'   gaps by returning one range per contiguous run of years. `d` may contain
+#'   duplicate rows per year (e.g. one row per trade partner); these are
+#'   collapsed to a single flag per year before computing ranges.
+#' @param d data.table with a `year` column and the flag column
+#' @param col name of the 0/1 flag column to summarize
+year_ranges <- function(d, col) {
+  vals <- d[[col]]
+  vals[is.na(vals)] <- 0
+  yearly <- data.table(year = d$year, flag = vals)[, .(flag = max(flag)), by = year]
+  yearly <- yearly[flag == 1]
+  if (nrow(yearly) == 0) {
+    return(character(0))
+  }
+  yearly <- yearly[order(year)]
+  grp <- cumsum(c(1L, diff(yearly$year) != 1L))
+  ranges <- yearly[, .(start = min(year), end = max(year)), by = grp]
+  vapply(seq_len(nrow(ranges)), function(i) format_year_range(ranges$start[i], ranges$end[i]), character(1))
+}
+
+#' @title Build an HTML narrative describing sanctions applied against a country
+#' @description Groups sanction cases by type (trade/financial) and stated
+#'   objective, listing the sanctioning countries with the years the sanction
+#'   was active and its outcome.
 #' @param d data.table as returned by `fetch_sanctions()`
 #' @param country_name Display name of the sanctioned country (article included, e.g. "the United Kingdom")
 #' @param lookup Flat name -> code vector, as returned by `flatten_countries()`, used to name the senders
@@ -522,59 +554,100 @@ sanctions_narrative <- function(d, country_name, lookup) {
     return("")
   }
 
-  n_cases <- uniqueN(d$case_id)
-  n_trade <- uniqueN(d[trade == 1, case_id])
-  n_financial <- uniqueN(d[financial == 1, case_id])
-
-  senders_codes <- unique(d$sanctioning_state_dynamic)
-  senders <- vapply(senders_codes, country_name_from_code, character(1), lookup = lookup)
-  senders_txt <- format_list_and(senders)
-  senders_txt <- gsub("\\s+\\(*.ISO.*\\)", "", senders_txt)
-
   obj_cols <- intersect(names(sanction_objective_labels), names(d))
-  objectives <- sanction_objective_labels[obj_cols[vapply(obj_cols, function(col) any(d[[col]] == 1, na.rm = TRUE), logical(1))]]
-  objectives_txt <- format_list_and(unname(objectives))
+  suc_cols <- intersect(
+    c("suc_failed", "suc_nego_settlement", "suc_ongoing", "suc_success_part", "suc_success_total"),
+    names(d)
+  )
 
-  outcome_txt <- if (any(d$suc_success_total == 1, na.rm = TRUE)) {
-    "were largely successful"
-  } else if (any(d$suc_success_part == 1, na.rm = TRUE)) {
-    "were partially successful"
-  } else if (any(d$suc_nego_settlement == 1, na.rm = TRUE)) {
-    "led to a negotiated settlement"
-  } else if (any(d$suc_ongoing == 1, na.rm = TRUE)) {
-    "remain ongoing"
-  } else if (any(d$suc_failed == 1, na.rm = TRUE)) {
-    "failed to achieve their stated goals"
-  } else {
-    "had an undetermined outcome"
+  case_summary <- d[, c(
+    list(
+      year_min = min(year),
+      year_max = max(year),
+      trade = max(trade, na.rm = TRUE),
+      financial = max(financial, na.rm = TRUE)
+    ),
+    lapply(.SD, function(x) max(x, na.rm = TRUE))
+  ), by = .(case_id, sanctioning_state_dynamic), .SDcols = c(obj_cols, suc_cols)]
+
+  case_outcome <- function(row) {
+    if (isTRUE(row$suc_success_total == 1)) {
+      "successful"
+    } else if (isTRUE(row$suc_success_part == 1)) {
+      "partially successful"
+    } else if (isTRUE(row$suc_nego_settlement == 1)) {
+      "negotiated settlement"
+    } else if (isTRUE(row$suc_ongoing == 1)) {
+      "ongoing"
+    } else if (isTRUE(row$suc_failed == 1)) {
+      "failed"
+    } else {
+      "undetermined outcome"
+    }
   }
 
-  type_txt <- if (n_trade > 0 && n_financial > 0) {
-    "both trade and financial sanctions"
-  } else if (n_trade > 0) {
-    "trade sanctions"
-  } else if (n_financial > 0) {
-    "financial sanctions"
-  } else {
-    "sanctions"
+  build_section <- function(type_col, type_label) {
+    sub <- case_summary[get(type_col) == 1]
+    if (nrow(sub) == 0) {
+      return(NULL)
+    }
+
+    items <- list()
+    for (col in obj_cols) {
+      rows <- sub[get(col) == 1]
+      if (nrow(rows) == 0) {
+        next
+      }
+      entries <- vapply(seq_len(nrow(rows)), function(i) {
+        row <- rows[i]
+        sender <- country_name_from_code(row$sanctioning_state_dynamic, lookup)
+        sender <- gsub("\\s+\\(*.ISO.*\\)", "", sender)
+        rng <- format_year_range(row$year_min, row$year_max)
+        paste0(sender, " (", rng, ", ", case_outcome(row), ")")
+      }, character(1))
+      items[[length(items) + 1]] <- tags$li(
+        tags$strong(sanction_objective_labels[[col]]), ": ", paste(entries, collapse = ", ")
+      )
+    }
+
+    if (length(items) == 0) {
+      return(NULL)
+    }
+
+    tagList(
+      tags$p(tags$strong(type_label)),
+      do.call(tags$ul, items)
+    )
   }
 
-  objectives_sentence <- if (nchar(objectives_txt) > 0) {
-    glue(" The stated objectives included { objectives_txt }.")
-  } else {
-    ""
+  trade_section <- build_section("trade", "Trade sanctions")
+  financial_section <- build_section("financial", "Financial sanctions")
+
+  if (is.null(trade_section) && is.null(financial_section)) {
+    return("")
   }
 
-  glue("{ country_name } was subject to { n_cases } sanction{ ifelse(n_cases == 1, '', 's') } imposed by { senders_txt }, involving { type_txt }.{ objectives_sentence } These measures { outcome_txt }.")
+  parts <- list(tags$p(paste0(country_name, " was under the following sanctions (the data sources cover up to 2023 for sanctions):")))
+  if (!is.null(trade_section)) parts[[length(parts) + 1]] <- trade_section
+  if (!is.null(financial_section)) parts[[length(parts) + 1]] <- financial_section
+
+  as.character(do.call(tagList, parts))
 }
 
-#' @title Build a Wikipedia-style paragraph with population, GDP per capita and bilateral gravity context
+#' @title Build an HTML narrative with population, GDP per capita, WTO/EU
+#'   membership periods and bilateral gravity context
 #' @param reporter_name Display name of the reporter country (article included)
 #' @param reporter_info Single-row data.table from the `dgd` reporter-context query
+#' @param membership_info data.table with one row per year (`year`, `member_wto_o`,
+#'   `member_eu_o`) over the selected range, used to compute membership periods
+#' @param max_year Latest year in the user-selected range, used to flag when the
+#'   population/GDP figures come from an earlier year than requested
 #' @param partner_name Display name of the partner country (article included), or `NULL` for multilateral profiles
 #' @param bilateral_info Single-row data.table from the `dgd` bilateral-context query, or `NULL`
-gravity_context_narrative <- function(reporter_name, reporter_info, partner_name = NULL, bilateral_info = NULL) {
-  base <- ""
+gravity_context_narrative <- function(reporter_name, reporter_info, membership_info = NULL, max_year = NULL,
+                                      partner_name = NULL, bilateral_info = NULL) {
+  parts <- list()
+
   if (!is.null(reporter_info) && nrow(reporter_info) > 0) {
     yr <- reporter_info$year[1]
     pop <- reporter_info$pop_o[1]
@@ -583,24 +656,34 @@ gravity_context_narrative <- function(reporter_name, reporter_info, partner_name
     if (!is.na(pop) && !is.na(gdp_cap)) {
       pop_txt <- paste0(format(round(pop, 1), nsmall = 1), " million")
       gdp_cap_txt <- paste0("$", formatC(round(gdp_cap), format = "d", big.mark = ","))
-      base <- glue("As of { yr }, { reporter_name } had a population of { pop_txt } and a GDP per capita of { gdp_cap_txt }.")
-      base <- gsub(", The", ", the", base)
-    }
-
-    membership <- character(0)
-    if (isTRUE(reporter_info$member_wto_o[1] == 1)) membership <- c(membership, "the World Trade Organization (WTO)")
-    if (isTRUE(reporter_info$member_eu_o[1] == 1)) membership <- c(membership, "the European Union (EU)")
-    if (length(membership) > 0) {
-      base <- paste0(base, glue(" { reporter_name } is a member of { format_list_and(membership) }."))
+      sentence <- glue("As of { yr }, { reporter_name } had a population of { pop_txt } and a GDP per capita of { gdp_cap_txt }. { yr } is the last year with population and GDP data in the sources.")
+      sentence <- gsub(", The", ", the", sentence)
+      parts[[length(parts) + 1]] <- tags$p(sentence)
     }
   }
 
-  bilateral_sentence <- ""
+  if (!is.null(membership_info) && nrow(membership_info) > 0) {
+    wto_ranges <- year_ranges(membership_info, "member_wto_o")
+    eu_ranges <- year_ranges(membership_info, "member_eu_o")
+
+    membership_parts <- character(0)
+    if (length(wto_ranges) > 0) {
+      membership_parts <- c(membership_parts, glue("the World Trade Organization (WTO) for the period { format_list_and(wto_ranges) }"))
+    }
+    if (length(eu_ranges) > 0) {
+      membership_parts <- c(membership_parts, glue("the European Union (EU) for the period { format_list_and(eu_ranges) }"))
+    }
+    if (length(membership_parts) > 0) {
+      parts[[length(parts) + 1]] <- tags$p(glue("{ reporter_name } was a member of { format_list_and(membership_parts) }. 2019 is the last year with memberships data in the sources."))
+    }
+  }
+
   if (!is.null(bilateral_info) && nrow(bilateral_info) > 0 && !is.null(partner_name)) {
+    bilateral_sentence <- ""
     dist <- bilateral_info$distance[1]
     if (!is.na(dist)) {
       dist_txt <- paste0(formatC(round(dist), format = "d", big.mark = ","), " km")
-      bilateral_sentence <- paste0(bilateral_sentence, glue(" { reporter_name } and { partner_name } are separated by a distance of approximately { dist_txt }."))
+      bilateral_sentence <- paste0(bilateral_sentence, glue("{ reporter_name } and { partner_name } are separated by a distance of approximately { dist_txt }."))
     }
     if (isTRUE(bilateral_info$contiguity[1] == 1)) {
       bilateral_sentence <- paste0(bilateral_sentence, " The two countries share a land border.")
@@ -614,9 +697,16 @@ gravity_context_narrative <- function(reporter_name, reporter_info, partner_name
     if (isTRUE(bilateral_info$common_colonizer[1] == 1)) {
       bilateral_sentence <- paste0(bilateral_sentence, " Both countries were once part of the same colonial empire.")
     }
+    if (nchar(trimws(bilateral_sentence)) > 0) {
+      parts[[length(parts) + 1]] <- tags$p(trimws(bilateral_sentence))
+    }
   }
 
-  trimws(paste0(base, bilateral_sentence))
+  if (length(parts) == 0) {
+    return("")
+  }
+
+  as.character(do.call(tagList, parts))
 }
 
 #' @title Typing reactiveValues is too long

@@ -639,6 +639,22 @@ mod_countries_server <- function(id, con) {
       )))
     })
 
+    # Full per-year WTO/EU membership series for the reporter over the
+    # selected range, used to compute membership periods (e.g. "1995-2022")
+    # rather than just a single-year snapshot.
+    reporter_membership <- eventReactive(input$go, {
+      e <- gsub("'", "''", inp_i())
+      min_yr <- as.integer(min(inp_y()))
+      max_yr <- as.integer(max(inp_y()))
+      setDT(dbGetQuery(con, sprintf(
+        "SELECT DISTINCT year, member_wto_o, member_eu_o
+         FROM dgd
+         WHERE iso3_dynamic_o = '%s' AND year BETWEEN %d AND %d
+         ORDER BY year",
+        e, min_yr, max_yr
+      )))
+    })
+
     # Bilateral gravity context (distance, contiguity, language, colonial ties)
     # only meaningful when a specific partner is selected. Same rule as
     # reporter_context(): restricted to the selected year range so nothing
@@ -679,6 +695,8 @@ mod_countries_server <- function(id, con) {
       context_txt <- gravity_context_narrative(
         reporter_name = reporter_disp,
         reporter_info = reporter_context(),
+        membership_info = reporter_membership(),
+        max_year = max(inp_y()),
         partner_name = partner_disp,
         bilateral_info = bilateral_context()
       )
@@ -690,7 +708,7 @@ mod_countries_server <- function(id, con) {
         ""
       }
 
-      paste(context_txt, sanctions_reporter_txt, sanctions_partner_txt)
+      paste0(context_txt, sanctions_reporter_txt, sanctions_partner_txt)
     })
 
     ### Text/Visual elements ----
@@ -1043,7 +1061,7 @@ mod_countries_server <- function(id, con) {
 
     ## Background information ----
 
-    output$country_background <- renderText(country_background_txt())
+    output$country_background <- renderUI(HTML(country_background_txt()))
 
     ## Country profile ----
 

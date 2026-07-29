@@ -21,6 +21,7 @@ utils::globalVariables(c(
   "imp_pct", "imp_share", "importer", "industry_id",
   "n",
   "region_colour",
+  "sanctioning_state_dynamic",
   "sector_color", "sum_trade_value",
   "trade", "trade_exp", "trade_imp", "trade_value", "trd_value_usd_bal",
   "year"
